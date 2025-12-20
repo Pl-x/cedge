@@ -1,0 +1,212 @@
+/* styles.css */
+:root {
+    /* Theme Colors derived from image_0.png */
+    --bg-gradient-start: #6a85b6;
+    --bg-gradient-end: #bac8e0; /* Fallback lighter blue */
+    --bg-main-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%); /* Deep Purple/Blue */
+    
+    --card-bg: rgba(30, 30, 40, 0.85); /* Dark glassmorphism background */
+    --input-bg: rgba(255, 255, 255, 0.07);
+    --border-color: rgba(255, 255, 255, 0.1);
+
+    --text-primary: #ffffff;
+    --text-secondary: #a9a9a9;
+    --text-muted: #6c757d;
+
+    --accent-blue: #3baaf0; /* Cyan blue from header */
+    --accent-hover: #2c91d1;
+    --danger-red: #d9534f; /* Red from error banner */
+
+    /* OAuth Colors */
+    --google-btn: #db4437;
+    --github-btn: #333333;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body, html {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    height: 100%;
+    background: var(--bg-main-gradient);
+    background-attachment: fixed; /* Ensures gradient covers whole page */
+    color: var(--text-primary);
+}
+
+/*--- Layout Utilities ---*/
+.auth-container {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.dashboard-loading-container {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+}
+
+/*--- Shared Card Component Styling ---*/
+.glass-card {
+    background: var(--card-bg);
+    backdrop-filter: blur(10px); /* Glass effect */
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    padding: 2.5rem;
+    width: 100%;
+    max-width: 450px;
+    text-align: center;
+    transition: transform 0.3s ease;
+}
+
+.auth-title {
+    margin-bottom: 1.5rem;
+    font-weight: 600;
+    letter-spacing: 1px;
+}
+
+.auth-subtitle {
+    color: var(--text-secondary);
+    margin-bottom: 2rem;
+    font-size: 0.9rem;
+}
+
+/*--- Form Elements ---*/
+.form-group {
+    margin-bottom: 1.2rem;
+    text-align: left;
+}
+
+.form-label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.form-input {
+    width: 100%;
+    padding: 12px 15px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    background: var(--input-bg);
+    color: var(--text-primary);
+    font-size: 1rem;
+    outline: none;
+    transition: border-color 0.3s;
+}
+
+.form-input:focus {
+    border-color: var(--accent-blue);
+}
+
+.btn-primary {
+    width: 100%;
+    padding: 12px;
+    border-radius: 8px;
+    border: none;
+    background: var(--accent-blue);
+    color: white;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.btn-primary:hover {
+    background: var(--accent-hover);
+}
+
+/*--- OAuth Section ---*/
+.oauth-divider {
+    display: flex;
+    align-items: center;
+    margin: 1.5rem 0;
+    color: var(--text-muted);
+}
+
+.oauth-divider::before, .oauth-divider::after {
+    content: "";
+    flex: 1;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.oauth-divider span {
+    margin: 0 10px;
+    font-size: 0.85rem;
+}
+
+.oauth-buttons {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 1.5rem;
+}
+
+.btn-oauth {
+    flex: 1;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    color: white;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: opacity 0.2s;
+}
+
+.btn-oauth:hover { opacity: 0.9; }
+.btn-google { background-color: var(--google-btn); }
+.btn-github { background-color: var(--github-btn); }
+
+/*--- Utility Links ---*/
+.auth-switch {
+    margin-top: 1rem;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.auth-link {
+    color: var(--accent-blue);
+    text-decoration: none;
+    font-weight: 600;
+    margin-left: 5px;
+}
+.auth-link:hover { text-decoration: underline; }
+
+/*--- Loading Spinner ---*/
+.spinner {
+    border: 4px solid rgba(255, 255, 255, 0.1);
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border-left-color: var(--accent-blue);
+    animation: spin 1s linear infinite;
+    margin-bottom: 1rem;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.error-banner {
+    background-color: var(--danger-red);
+    color: white;
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    text-align: left;
+}
