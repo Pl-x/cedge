@@ -230,42 +230,7 @@ useEffect(() => {
         service: populatedData.service || newRequests[index].service,
         description: populatedData.description || newRequests[index].description
       };
-      // const newAutoPopulatedFields = [...autoPopulatedFields];
-
-      // // Only update fields that are empty or were auto-populated
-      // if (populatedData.source_ip && (!newRequests[index].sourceIP || autoPopulatedFields[index].sourceIP)) {
-      //   newRequests[index].sourceIP = populatedData.source_ip;
-      //   newAutoPopulatedFields[index].sourceIP = true;
-      // }
-
-      // if (populatedData.source_host && (!newRequests[index].sourceHost || autoPopulatedFields[index].sourceHost)) {
-      //   newRequests[index].sourceHost = populatedData.source_host;
-      //   newAutoPopulatedFields[index].sourceHost = true;
-      // }
-
-      // if (populatedData.destination_ip && (!newRequests[index].destinationIP || autoPopulatedFields[index].destinationIP)) {
-      //   newRequests[index].destinationIP = populatedData.destination_ip;
-      //   newAutoPopulatedFields[index].destinationIP = true;
-      // }
-
-      // if (populatedData.destination_host && (!newRequests[index].destinationHost || autoPopulatedFields[index].destinationHost)) {
-      //   newRequests[index].destinationHost = populatedData.destination_host;
-      //   newAutoPopulatedFields[index].destinationHost = true;
-      // }
-
-      // if (populatedData.service && (!newRequests[index].service || autoPopulatedFields[index].service)) {
-      //   newRequests[index].service = populatedData.service;
-      //   newAutoPopulatedFields[index].service = true;
-      // }
-
-      // if (populatedData.description && (!newRequests[index].description || autoPopulatedFields[index].description)) {
-      //   newRequests[index].description = populatedData.description;
-      //   newAutoPopulatedFields[index].description = true;
-      // }
-
       setRequests(newRequests);
-      // setAutoPopulatedFields(newAutoPopulatedFields);
-
     } catch (error) {
       console.error("❌ Error in backend autopopulation:", error);
     }
@@ -324,9 +289,6 @@ useEffect(() => {
     const category = request.category;
 
     if (!system_type || !category || system_type === "Others") return [];
-
-    // console.log(`🔍 Filtering Destination IPs for ${system_type} - ${category}`);
-
     const filteredIPs = options.destination_ips.filter(ip =>
       ip.system_type === system_type &&
       ip.category === category
@@ -370,22 +332,6 @@ useEffect(() => {
         return [];
     }
   };
-
-  // // NEW: Validate a single field
-  // const validateField = (field, value) => {
-  //   switch (field) {
-  //     case 'sourceIP':
-  //     case 'destinationIP':
-  //       return validateIP(value);
-  //     case 'service':
-  //       return validateService(value);
-  //     case 'description':
-  //       return validateDescription(value);
-  //     default:
-  //       return { valid: true, error: '' };
-  //   }
-  // };
-
   //  Handle field blur - validate on blur
   const handleFieldBlur = (index, field) => {
     // Skip validation for "Others" category on certain fields
@@ -418,30 +364,6 @@ useEffect(() => {
 
     if (field === 'system_type' && oldValue !== value) {
 
-//       const wasTemplateLoaded = Object.values(newAutoPopulatedFields[index]).some(val => val === true);
-//
-//       if(!wasTemplateLoaded){
-//         newRequests[index].category = "";
-//         newRequests[index].sourceIP = "";
-//         newRequests[index].sourceIPId = "";
-//         newRequests[index].sourceHost = "";
-//         newRequests[index].destinationIP = "";
-//         newRequests[index].destinationIPId = "";
-//         newRequests[index].destinationHost = "";
-//         newRequests[index].service = "";
-//         newRequests[index].description = "";
-//
-//         newAutoPopulatedFields[index] = {
-//           sourceIP: false,
-//           sourceHost: false,
-//           destinationIP: false,
-//           destinationHost: false,
-//           service: false,
-//           description: false
-//         };
-//       }
-
-
       // Clear validation errors for this row
       const newErrors = [...validationErrors];
       newErrors[index] = {};
@@ -450,28 +372,6 @@ useEffect(() => {
 
     // Reset IP fields when category changes (for non-Others system_type)
     if (field === 'category' && !isOthersCategory(index) && oldValue !== value) {
-
-//       const wasTemplateLoaded = Object.value(autoPopulatedFields[index]).some(val => val === true)
-//       if(!wasTemplateLoaded){
-//         newRequests[index].sourceIP = "";
-//         newRequests[index].sourceIPId = "";
-//         newRequests[index].sourceHost = "";
-//         newRequests[index].destinationIP = "";
-//         newRequests[index].destinationIPId = "";
-//         newRequests[index].destinationHost = "";
-//         newRequests[index].service = "";
-//         newRequests[index].description = "";
-//
-//         newAutoPopulatedFields[index] = {
-//           sourceIP: false,
-//           sourceHost: false,
-//           destinationIP: false,
-//           destinationHost: false,
-//           service: false,
-//           description: false
-//         };
-//
-//       }
 
       // Clear validation errors for IP fields
       const newErrors = [...validationErrors];
@@ -620,7 +520,7 @@ useEffect(() => {
     setTouchedFields([...touchedFields, {}]);
   };
 
-  // MODIFIED: Remove request with validation state
+  // Remove request with validation state
   const removeRequest = (index) => {
     if (requests.length > 1) {
       const newRequests = requests.filter((_, i) => i !== index);
@@ -634,96 +534,6 @@ useEffect(() => {
       setTouchedFields(newTouchedFields);
     }
   };
-
-  // NEW: Validate all requests before submission
-  // const validateAllRequests = () => {
-  //   const newErrors = [];
-  //   let hasErrors = false;
-
-  //   requests.forEach((req, index) => {
-  //     const rowErrors = {};
-
-  //     // Only validate relevant fields for "Others" category
-  //     if (isOthersCategory(index)) {
-  //       // Validate IPs
-  //       const sourceIPValidation = validateIP(req.sourceIP);
-  //       if (!sourceIPValidation.valid) {
-  //         rowErrors.sourceIP = sourceIPValidation.error;
-  //         hasErrors = true;
-  //       }
-
-  //       const destIPValidation = validateIP(req.destinationIP);
-  //       if (!destIPValidation.valid) {
-  //         rowErrors.destinationIP = destIPValidation.error;
-  //         hasErrors = true;
-  //       }
-
-  //       // Validate Service
-  //       const serviceValidation = validateService(req.service);
-  //       if (!serviceValidation.valid) {
-  //         rowErrors.service = serviceValidation.error;
-  //         hasErrors = true;
-  //       }
-
-  //       // Validate Description (optional but if provided)
-  //       if (req.description) {
-  //         const descValidation = validateDescription(req.description);
-  //         if (!descValidation.valid) {
-  //           rowErrors.description = descValidation.error;
-  //           hasErrors = true;
-  //         }
-  //       }
-  //     } else {
-  //       // Standard validation for non-"Others" system types
-  //       if (req.sourceIP) {
-  //         const sourceIPValidation = validateIP(req.sourceIP);
-  //         if (!sourceIPValidation.valid) {
-  //           rowErrors.sourceIP = sourceIPValidation.error;
-  //           hasErrors = true;
-  //         }
-  //       }
-
-  //       if (req.destinationIP) {
-  //         const destIPValidation = validateIP(req.destinationIP);
-  //         if (!destIPValidation.valid) {
-  //           rowErrors.destinationIP = destIPValidation.error;
-  //           hasErrors = true;
-  //         }
-  //       }
-
-  //       if (req.service) {
-  //         const serviceValidation = validateService(req.service);
-  //         if (!serviceValidation.valid) {
-  //           rowErrors.service = serviceValidation.error;
-  //           hasErrors = true;
-  //         }
-  //       }
-
-  //       if (req.description) {
-  //         const descValidation = validateDescription(req.description);
-  //         if (!descValidation.valid) {
-  //           rowErrors.description = descValidation.error;
-  //           hasErrors = true;
-  //         }
-  //       }
-  //     }
-
-  //     newErrors[index] = rowErrors;
-  //   });
-
-  //   // Mark all fields as touched
-  //   const allTouched = requests.map(() => ({
-  //     sourceIP: true,
-  //     destinationIP: true,
-  //     service: true,
-  //     description: true
-  //   }));
-  //   setTouchedFields(allTouched);
-
-  //   setValidationErrors(newErrors);
-  //   return !hasErrors;
-  // };
-
   const validateRequestsBackend = async () => {
     setIsValidating(true);
     setValidationErrors([]);
@@ -854,18 +664,6 @@ useEffect(() => {
       setLoading(false);
     }
   };
-
-
-  // // Helper to check if field has error
-  // const hasFieldError = (index, field) => {
-  //   return touchedFields[index]?.[field] && validationErrors[index]?.[field];
-  // };
-
-  // // Helper to get field error message
-  // const getFieldError = (index, field) => {
-  //   return validationErrors[index]?.[field] || '';
-  // };
-
   if (loading && requests.length === 1 && !requests[0].system_type) {
     return <div className="loading">Loading form options...</div>;
   }

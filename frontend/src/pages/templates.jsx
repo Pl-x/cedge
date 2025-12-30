@@ -45,7 +45,7 @@ const TemplatesPage = () => {
         finally { setLoading(false); }
     };
 
-    // Form Helpers
+    // helpers for the form
     const addRule = () => setRules([...rules, { system_type: '', category: '', source_ip: '', source_host: '', destination_ip: '', destination_host: '', service: '', description: '', action: 'allow' }]);
     const removeRule = (index) => rules.length > 1 && setRules(rules.filter((_, i) => i !== index));
     const updateRule = (index, field, value) => {

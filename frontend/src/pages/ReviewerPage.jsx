@@ -21,7 +21,7 @@ function ReviewerPage() {
   const [downloadError, setDownloadError] = useState("");
 
   // Theme State
-  const [isDarkMode, setIsDarkMode] = useState(true); // Default to Dark Mode for "Enticing" look
+  const [isDarkMode, setIsDarkMode] = useState(true);
 
   const toggleTheme = () => setIsDarkMode(!isDarkMode);
 
