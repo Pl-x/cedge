@@ -7,7 +7,7 @@ services:
     container_name: acl_mysql
     restart: always
     environment:
-      MYSQL_HOST: mysql
+      MYSQL_HOST: localhost
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       MYSQL_USER: ${MYSQL_USER}

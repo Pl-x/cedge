@@ -1337,8 +1337,7 @@ def auto_populate_fields():
     """Auto-population"""
     try:
         data = request.json
-        print(f"📥 Auto-populate request: {data}")
-
+        
         system_type = data.get('system_type', '')
         category = data.get('category', '')
         source_ip = data.get('sourceIP', '').strip()
@@ -1354,7 +1353,6 @@ def auto_populate_fields():
                 ).first()
 
                 if rule:
-                    print(f"✅ Found matching rule by source IP: {rule.id}")
                     return jsonify({
                         "source_ip": rule.source_ip,
                         "source_host": rule.source_host or "",
@@ -1362,9 +1360,10 @@ def auto_populate_fields():
                         "destination_host": rule.destination_host or "",
                         "service": rule.service or "",
                         "description": rule.description or "",
-                        "matched_by": "source_ip"
+                        "matched_by": "source_ip",
+                        "rule_id": rule.id
                     })
-                return jsonify({'error': 'No matching rules Found'}), 404
+                return jsonify({'error': 'No matching rules Found'}), 200
 
             # If we have a destination IP, find the exact rule
             if destination_ip:
@@ -1375,8 +1374,6 @@ def auto_populate_fields():
                 ).first()
 
                 if rule:
-                    print(
-                        f"✅ Found matching rule by destination IP: {rule.id}")
                     return jsonify({
                         "source_ip": rule.source_ip or "",
                         "source_host": rule.source_host or "",
@@ -1384,28 +1381,29 @@ def auto_populate_fields():
                         "destination_host": rule.destination_host or "",
                         "service": rule.service or "",
                         "description": rule.description or "",
-                        "matched_by": "destination_ip"
+                        "matched_by": "destination_ip",
+                        "rule_id": rule.id #included for verification
                     })
-                return jsonify({'error': 'No matching rules Found'}), 404
+                return jsonify({'error': 'No matching rules Found'}), 200
 
             # Fallback: return first rule in category as template
-            template_rule = FirewallRule.query.filter_by(
-                system_type=system_type,
-                category=category
-            ).first()
+            # template_rule = FirewallRule.query.filter_by(
+            #     system_type=system_type,
+            #     category=category
+            # ).first()
 
-            if template_rule:
-                return jsonify({
-                    "source_ip": template_rule.source_ip or "",
-                    "source_host": template_rule.source_host or "",
-                    "destination_ip": template_rule.destination_ip or "",
-                    "destination_host": template_rule.destination_host or "",
-                    "service": template_rule.service or "",
-                    "description": template_rule.description or "",
-                    "is_template": True
-                })
+            # if template_rule:
+            #     return jsonify({
+            #         "source_ip": template_rule.source_ip or "",
+            #         "source_host": template_rule.source_host or "",
+            #         "destination_ip": template_rule.destination_ip or "",
+            #         "destination_host": template_rule.destination_host or "",
+            #         "service": template_rule.service or "",
+            #         "description": template_rule.description or "",
+            #         "is_template": True
+            #     })
 
-            return jsonify({"error": "No matching rules found"}), 404
+            return jsonify({"error": "No Source ip or destination ip has been provided"}), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -1614,6 +1612,195 @@ def create_template(current_user):
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': f'Failed to create template: {str(e)}'}), 500
+
+
+@app.route('/api/v1/admin/templates/multi-rule', methods=['POST'])
+@token_required('admin')
+def create_multi_rule_template(current_user):
+    """Create a template with multiple rules"""
+    try:
+        data = request.get_json()
+        
+        if not data or 'template_name' not in data or 'rules' not in data:
+            return jsonify({'error': 'Missing required fields: template_name and rules'}), 400
+        
+        template_name = data['template_name']
+        rules = data['rules']  # Array of rule objects
+        
+        if not rules or len(rules) == 0:
+            return jsonify({'error': 'Template must have at least one rule'}), 400
+        
+        # Check for duplicate template name
+        existing = Templates.query.filter_by(
+            template_name=template_name,
+            is_active=True
+        ).first()
+        
+        if existing:
+            return jsonify({'error': 'Template with this name already exists'}), 409
+        
+        created_templates = []
+        
+        # Create multiple template entries (one per rule) with same template_name
+        for idx, rule_data in enumerate(rules):
+            # Validate required fields for each rule
+            required = ['system_type', 'category', 'source_ip', 'destination_ip', 'service']
+            for field in required:
+                if field not in rule_data or not rule_data[field]:
+                    return jsonify({
+                        'error': f'Missing required field "{field}" in rule #{idx + 1}'
+                    }), 400
+            
+            # Validate IPs and service
+            source_valid = validate_ip(rule_data['source_ip'])
+            if not source_valid[0]:
+                return jsonify({'error': f'Rule #{idx + 1}: Invalid source IP - {source_valid[1]}'}), 400
+            
+            dest_valid = validate_ip(rule_data['destination_ip'])
+            if not dest_valid[0]:
+                return jsonify({'error': f'Rule #{idx + 1}: Invalid destination IP - {dest_valid[1]}'}), 400
+            
+            service_valid = validate_service(rule_data['service'])
+            if not service_valid[0]:
+                return jsonify({'error': f'Rule #{idx + 1}: Invalid service - {service_valid[1]}'}), 400
+            
+            # Create template entry
+            new_template = Templates(
+                template_name=template_name,  # Same name for all rules in this template
+                rule_index=idx,  # Track which rule this is in the template
+                requester=rule_data.get('requester'),
+                system_type=rule_data['system_type'],
+                category=rule_data['category'],
+                source_ip=rule_data['source_ip'],
+                source_host=rule_data.get('source_host', ''),
+                destination_ip=rule_data['destination_ip'],
+                destination_host=rule_data.get('destination_host', ''),
+                service=rule_data['service'],
+                description=rule_data.get('description', ''),
+                action=rule_data.get('action', 'allow'),
+                created_by=current_user.username
+            )
+            
+            db.session.add(new_template)
+            created_templates.append(new_template)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'message': f'Multi-rule template "{template_name}" created with {len(created_templates)} rules',
+            'template_name': template_name,
+            'rule_count': len(created_templates),
+            'rules': [t.to_json() for t in created_templates]
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Failed to create multi-rule template: {str(e)}'}), 500
+
+
+@app.route('/api/v1/templates/grouped', methods=['GET'])
+@token_required()
+def get_grouped_templates(current_user):
+    """Get templates grouped by template_name (showing multi-rule templates)"""
+    try:
+        all_templates = Templates.query.filter_by(is_active=True).order_by(
+            Templates.template_name, Templates.rule_index
+        ).all()
+        
+        # Group by template_name
+        grouped = {}
+        for template in all_templates:
+            name = template.template_name
+            if name not in grouped:
+                grouped[name] = {
+                    'template_name': name,
+                    'created_by': template.created_by,
+                    'created_at': template.created_at.isoformat(),
+                    'rule_count': 0,
+                    'rules': []
+                }
+            
+            grouped[name]['rules'].append(template.to_json())
+            grouped[name]['rule_count'] += 1
+        
+        return jsonify({
+            'templates': list(grouped.values()),
+            'count': len(grouped)
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': f'Failed to fetch templates: {str(e)}'}), 500
+
+
+@app.route('/api/v1/validate-requests', methods=['POST'])
+@token_required()
+def validate_requests_backend(current_user):
+    """Validate all requests and return detailed errors"""
+    try:
+        data = request.get_json()
+        
+        if not data or 'requests' not in data:
+            return jsonify({'error': 'No requests provided'}), 400
+        
+        requests_data = data['requests']
+        validation_results = []
+        has_errors = False
+        
+        for idx, req in enumerate(requests_data):
+            row_errors = {}
+            
+            # Validate Source IP
+            if 'sourceIP' in req:
+                source_valid = validate_ip(req['sourceIP'])
+                if not source_valid[0]:
+                    row_errors['sourceIP'] = source_valid[1]
+                    has_errors = True
+            else:
+                row_errors['sourceIP'] = 'Source IP is required'
+                has_errors = True
+            
+            # Validate Destination IP
+            if 'destinationIP' in req:
+                dest_valid = validate_ip(req['destinationIP'])
+                if not dest_valid[0]:
+                    row_errors['destinationIP'] = dest_valid[1]
+                    has_errors = True
+            else:
+                row_errors['destinationIP'] = 'Destination IP is required'
+                has_errors = True
+            
+            # Validate Service
+            if 'service' in req:
+                service_valid = validate_service(req['service'])
+                if not service_valid[0]:
+                    row_errors['service'] = service_valid[1]
+                    has_errors = True
+            else:
+                row_errors['service'] = 'Service is required'
+                has_errors = True
+            
+            # Validate Description (if provided)
+            if 'description' in req and req['description']:
+                desc_valid = validate_description(req['description'])
+                if not desc_valid[0]:
+                    row_errors['description'] = desc_valid[1]
+                    has_errors = True
+            
+            validation_results.append({
+                'row_index': idx,
+                'valid': len(row_errors) == 0,
+                'errors': row_errors
+            })
+        
+        return jsonify({
+            'valid': not has_errors,
+            'validation_results': validation_results,
+            'error_count': sum(1 for r in validation_results if not r['valid'])
+        }), 200 if not has_errors else 400
+        
+    except Exception as e:
+        return jsonify({'error': f'Validation failed: {str(e)}'}), 500
+
 
 
 @app.route('/api/v1/admin/templates/<id>', methods= ['PUT'])

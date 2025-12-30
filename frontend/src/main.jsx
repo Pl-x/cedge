@@ -8,7 +8,6 @@ import ToggleTheme from './pages/toggle-theme.jsx'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <ToggleTheme />
     <App />
   </React.StrictMode>,
 )

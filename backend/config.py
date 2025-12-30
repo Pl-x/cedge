@@ -13,7 +13,7 @@ cors = CORS()
 
 # Google Sheets Configuration
 GOOGLE_SHEETS = {
-    'MAIN_SHEET': os.getenv('GOGLE_SHEET_URL', ''),
+    'MAIN_SHEET': os.getenv('GOOGLE_SHEETS_URL', ''),
     'SYNC_INTERVAL': 300
 }
 

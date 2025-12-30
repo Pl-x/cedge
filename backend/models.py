@@ -107,6 +107,7 @@ class Templates(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     is_active = db.Column(db.Boolean, default=True)
+    rule_index = db.Column(db.Integer, default=0)
     
     def to_json(self):
         return {
@@ -126,6 +127,7 @@ class Templates(db.Model):
             "created_by": self.created_by,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
-            "is_active": self.is_active
+            "is_active": self.is_active,
+            "rule_index": self.rule_index
         }
     

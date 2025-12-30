@@ -27,6 +27,8 @@ function RequesterPage() {
   const [submitError, setSubmitError] = useState("");
   const [submitSuccess, setSubmitSuccess] = useState("");
   const [validationErrors, setValidationErrors] = useState([{}]);
+  const [isValidating, setIsValidating] = useState(false);
+  const [showValidationModal, setShowValidationModal] = useState(false);
   const [touchedFields, setTouchedFields] = useState([{}]);
   const [showTemplates, setShowTemplates] = useState(false);
   const [templates, setTemplates] = useState([]);
@@ -34,32 +36,11 @@ function RequesterPage() {
   const [showHelp, setShowHelp] = useState(false);
   const [helpContent, setHelpContent] = useState(null);
   const [loadingHelp, setLoadingHelp] = useState(false);
-  const loadTemplate = (template, targetIndex = 0) => {
-    const newRequests = [...requests];
-    newRequests[targetIndex] = {
-      ...newRequests[targetIndex],
-      system_type: template.system_type,
-      category: template.category,
-      sourceIP: template.source_ip,
-      sourceHost: template.source_host,
-      destinationIP: template.destination_ip,
-      destinationHost: template.destination_host,
-      service: template.service,
-      description: template.description,
-      action: template.action
-    };
-    setRequests(newRequests);
-    setAutoPopulatedFields(newAutoPopulatedFields)
-    setShowTemplates(false);
-    setSubmitSuccess(`Template "${template.template_name}" loaded!`);
-    setTimeout(() => setSubmitSuccess(''), 3000);
-  };
-
   const fetchTemplates = async () => {
     setLoadingTemplates(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE_URL}/api/v1/templates`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/templates/grouped`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
@@ -73,11 +54,33 @@ function RequesterPage() {
     }
   };
 
-  // Fetch templates when modal opens
-  useEffect(() => {
-    if (showTemplates) {
-      fetchTemplates();
-    }
+  const loadTemplate = (template) => {
+    if (template.rules && template.rules.length > 0) {
+      // Replace current requests with template rules
+      const newRequests = template.rules.map(rule => ({
+        system_type: rule.system_type,
+        category: rule.category,
+        sourceIP: rule.source_ip,
+        sourceHost: rule.source_host,
+        destinationIP: rule.destination_ip,
+        destinationHost: rule.destination_host,
+        service: rule.service,
+        description: rule.description,
+        action: rule.action
+    }));
+    setRequests(newRequests);
+    // setAutoPopulatedFields(newAutoPopulatedFields)
+    setShowTemplates(false);
+    setSubmitSuccess(`Template "${template.template_name}" loaded!`);
+    setTimeout(() => setSubmitSuccess(''), 3000);
+  };
+}
+
+// Fetch templates when modal opens
+useEffect(() => {
+  if (showTemplates) {
+    fetchTemplates();
+  }
   }, [showTemplates]);
 
   // Fetch help content when modal opens
@@ -112,7 +115,7 @@ function RequesterPage() {
       const response = await fetch(`${API_BASE_URL}/api/v1/generate-xlsx`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      
+
       if (response.ok) {
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
@@ -201,65 +204,67 @@ function RequesterPage() {
     if (!system_type || !category || system_type === "Others") return;
 
     try {
-      // console.log(`🔄 Calling backend autopopulation for ${field}: ${value}`);
-
       const response = await fetch(`${API_BASE_URL}/api/auto-populate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           system_type: system_type,
           category: category,
-          sourceIP: field === 'sourceIP' ? value : currentRequest.sourceIP,
-          destinationIP: field === 'destinationIP' ? value : currentRequest.destinationIP,
+          sourceIP: field === 'sourceIP' ? value : "", //currentRequest.sourceIP,
+          destinationIP: field === 'destinationIP' ? value : "", //currentRequest.destinationIP,
         }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        // console.log(`❌ Backend autopopulation failed:`, errorData);
-        return;
-      }
+      if (!response.ok) return;
 
       const populatedData = await response.json();
-      // console.log(`✅ Backend autopopulation result:`, populatedData);
+      if (Object.keys(populatedData).length === 0) return;
 
-      // Update the request with populated data
       const newRequests = [...requests];
-      const newAutoPopulatedFields = [...autoPopulatedFields];
+      newRequests[index] = {
+        ...newRequests[index],
+        sourceIP: populatedData.source_ip || newRequests[index].sourceIP,
+        sourceHost: populatedData.source_host || newRequests[index].sourceHost,
+        destinationIP: populatedData.destination_ip || newRequests[index].destinationIP,
+        destinationHost: populatedData.destination_host || newRequests[index].destinationHost,
+        service: populatedData.service || newRequests[index].service,
+        description: populatedData.description || newRequests[index].description
+      };
+      // const newAutoPopulatedFields = [...autoPopulatedFields];
 
-      // Only update fields that are empty or were auto-populated
-      if (populatedData.source_ip && (!newRequests[index].sourceIP || autoPopulatedFields[index].sourceIP)) {
-        newRequests[index].sourceIP = populatedData.source_ip;
-        newAutoPopulatedFields[index].sourceIP = true;
-      }
+      // // Only update fields that are empty or were auto-populated
+      // if (populatedData.source_ip && (!newRequests[index].sourceIP || autoPopulatedFields[index].sourceIP)) {
+      //   newRequests[index].sourceIP = populatedData.source_ip;
+      //   newAutoPopulatedFields[index].sourceIP = true;
+      // }
 
-      if (populatedData.source_host && (!newRequests[index].sourceHost || autoPopulatedFields[index].sourceHost)) {
-        newRequests[index].sourceHost = populatedData.source_host;
-        newAutoPopulatedFields[index].sourceHost = true;
-      }
+      // if (populatedData.source_host && (!newRequests[index].sourceHost || autoPopulatedFields[index].sourceHost)) {
+      //   newRequests[index].sourceHost = populatedData.source_host;
+      //   newAutoPopulatedFields[index].sourceHost = true;
+      // }
 
-      if (populatedData.destination_ip && (!newRequests[index].destinationIP || autoPopulatedFields[index].destinationIP)) {
-        newRequests[index].destinationIP = populatedData.destination_ip;
-        newAutoPopulatedFields[index].destinationIP = true;
-      }
+      // if (populatedData.destination_ip && (!newRequests[index].destinationIP || autoPopulatedFields[index].destinationIP)) {
+      //   newRequests[index].destinationIP = populatedData.destination_ip;
+      //   newAutoPopulatedFields[index].destinationIP = true;
+      // }
 
-      if (populatedData.destination_host && (!newRequests[index].destinationHost || autoPopulatedFields[index].destinationHost)) {
-        newRequests[index].destinationHost = populatedData.destination_host;
-        newAutoPopulatedFields[index].destinationHost = true;
-      }
+      // if (populatedData.destination_host && (!newRequests[index].destinationHost || autoPopulatedFields[index].destinationHost)) {
+      //   newRequests[index].destinationHost = populatedData.destination_host;
+      //   newAutoPopulatedFields[index].destinationHost = true;
+      // }
 
-      if (populatedData.service && (!newRequests[index].service || autoPopulatedFields[index].service)) {
-        newRequests[index].service = populatedData.service;
-        newAutoPopulatedFields[index].service = true;
-      }
+      // if (populatedData.service && (!newRequests[index].service || autoPopulatedFields[index].service)) {
+      //   newRequests[index].service = populatedData.service;
+      //   newAutoPopulatedFields[index].service = true;
+      // }
 
-      if (populatedData.description && (!newRequests[index].description || autoPopulatedFields[index].description)) {
-        newRequests[index].description = populatedData.description;
-        newAutoPopulatedFields[index].description = true;
-      }
+      // if (populatedData.description && (!newRequests[index].description || autoPopulatedFields[index].description)) {
+      //   newRequests[index].description = populatedData.description;
+      //   newAutoPopulatedFields[index].description = true;
+      // }
 
       setRequests(newRequests);
-      setAutoPopulatedFields(newAutoPopulatedFields);
+      // setAutoPopulatedFields(newAutoPopulatedFields);
 
     } catch (error) {
       console.error("❌ Error in backend autopopulation:", error);
@@ -366,20 +371,20 @@ function RequesterPage() {
     }
   };
 
-  // NEW: Validate a single field
-  const validateField = (field, value) => {
-    switch (field) {
-      case 'sourceIP':
-      case 'destinationIP':
-        return validateIP(value);
-      case 'service':
-        return validateService(value);
-      case 'description':
-        return validateDescription(value);
-      default:
-        return { valid: true, error: '' };
-    }
-  };
+  // // NEW: Validate a single field
+  // const validateField = (field, value) => {
+  //   switch (field) {
+  //     case 'sourceIP':
+  //     case 'destinationIP':
+  //       return validateIP(value);
+  //     case 'service':
+  //       return validateService(value);
+  //     case 'description':
+  //       return validateDescription(value);
+  //     default:
+  //       return { valid: true, error: '' };
+  //   }
+  // };
 
   //  Handle field blur - validate on blur
   const handleFieldBlur = (index, field) => {
@@ -389,25 +394,6 @@ function RequesterPage() {
       const newTouched = [...touchedFields];
       newTouched[index] = { ...newTouched[index], [field]: true };
       setTouchedFields(newTouched);
-
-      // Only validate the fields that matter for "Others"
-      if (['sourceIP', 'destinationIP', 'service', 'description'].includes(field)) {
-        const value = requests[index][field];
-        const validation = validateField(field, value);
-
-        if (!validation.valid) {
-          const newErrors = [...validationErrors];
-          newErrors[index] = { ...newErrors[index], [field]: validation.error };
-          setValidationErrors(newErrors);
-        } else {
-          // Clear error
-          const newErrors = [...validationErrors];
-          if (newErrors[index]) {
-            delete newErrors[index][field];
-          }
-          setValidationErrors(newErrors);
-        }
-      }
       return;
     }
 
@@ -415,23 +401,6 @@ function RequesterPage() {
     const newTouched = [...touchedFields];
     newTouched[index] = { ...newTouched[index], [field]: true };
     setTouchedFields(newTouched);
-
-    // Validate the field
-    const value = requests[index][field];
-    const validation = validateField(field, value);
-
-    if (!validation.valid) {
-      const newErrors = [...validationErrors];
-      newErrors[index] = { ...newErrors[index], [field]: validation.error };
-      setValidationErrors(newErrors);
-    } else {
-      // Clear error if valid
-      const newErrors = [...validationErrors];
-      if (newErrors[index]) {
-        delete newErrors[index][field];
-      }
-      setValidationErrors(newErrors);
-    }
   };
 
   const updateRequest = (index, field, value) => {
@@ -667,95 +636,130 @@ function RequesterPage() {
   };
 
   // NEW: Validate all requests before submission
-  const validateAllRequests = () => {
-    const newErrors = [];
-    let hasErrors = false;
+  // const validateAllRequests = () => {
+  //   const newErrors = [];
+  //   let hasErrors = false;
 
-    requests.forEach((req, index) => {
-      const rowErrors = {};
+  //   requests.forEach((req, index) => {
+  //     const rowErrors = {};
 
-      // Only validate relevant fields for "Others" category
-      if (isOthersCategory(index)) {
-        // Validate IPs
-        const sourceIPValidation = validateIP(req.sourceIP);
-        if (!sourceIPValidation.valid) {
-          rowErrors.sourceIP = sourceIPValidation.error;
-          hasErrors = true;
-        }
+  //     // Only validate relevant fields for "Others" category
+  //     if (isOthersCategory(index)) {
+  //       // Validate IPs
+  //       const sourceIPValidation = validateIP(req.sourceIP);
+  //       if (!sourceIPValidation.valid) {
+  //         rowErrors.sourceIP = sourceIPValidation.error;
+  //         hasErrors = true;
+  //       }
 
-        const destIPValidation = validateIP(req.destinationIP);
-        if (!destIPValidation.valid) {
-          rowErrors.destinationIP = destIPValidation.error;
-          hasErrors = true;
-        }
+  //       const destIPValidation = validateIP(req.destinationIP);
+  //       if (!destIPValidation.valid) {
+  //         rowErrors.destinationIP = destIPValidation.error;
+  //         hasErrors = true;
+  //       }
 
-        // Validate Service
-        const serviceValidation = validateService(req.service);
-        if (!serviceValidation.valid) {
-          rowErrors.service = serviceValidation.error;
-          hasErrors = true;
-        }
+  //       // Validate Service
+  //       const serviceValidation = validateService(req.service);
+  //       if (!serviceValidation.valid) {
+  //         rowErrors.service = serviceValidation.error;
+  //         hasErrors = true;
+  //       }
 
-        // Validate Description (optional but if provided)
-        if (req.description) {
-          const descValidation = validateDescription(req.description);
-          if (!descValidation.valid) {
-            rowErrors.description = descValidation.error;
-            hasErrors = true;
-          }
-        }
-      } else {
-        // Standard validation for non-"Others" system types
-        if (req.sourceIP) {
-          const sourceIPValidation = validateIP(req.sourceIP);
-          if (!sourceIPValidation.valid) {
-            rowErrors.sourceIP = sourceIPValidation.error;
-            hasErrors = true;
-          }
-        }
+  //       // Validate Description (optional but if provided)
+  //       if (req.description) {
+  //         const descValidation = validateDescription(req.description);
+  //         if (!descValidation.valid) {
+  //           rowErrors.description = descValidation.error;
+  //           hasErrors = true;
+  //         }
+  //       }
+  //     } else {
+  //       // Standard validation for non-"Others" system types
+  //       if (req.sourceIP) {
+  //         const sourceIPValidation = validateIP(req.sourceIP);
+  //         if (!sourceIPValidation.valid) {
+  //           rowErrors.sourceIP = sourceIPValidation.error;
+  //           hasErrors = true;
+  //         }
+  //       }
 
-        if (req.destinationIP) {
-          const destIPValidation = validateIP(req.destinationIP);
-          if (!destIPValidation.valid) {
-            rowErrors.destinationIP = destIPValidation.error;
-            hasErrors = true;
-          }
-        }
+  //       if (req.destinationIP) {
+  //         const destIPValidation = validateIP(req.destinationIP);
+  //         if (!destIPValidation.valid) {
+  //           rowErrors.destinationIP = destIPValidation.error;
+  //           hasErrors = true;
+  //         }
+  //       }
 
-        if (req.service) {
-          const serviceValidation = validateService(req.service);
-          if (!serviceValidation.valid) {
-            rowErrors.service = serviceValidation.error;
-            hasErrors = true;
-          }
-        }
+  //       if (req.service) {
+  //         const serviceValidation = validateService(req.service);
+  //         if (!serviceValidation.valid) {
+  //           rowErrors.service = serviceValidation.error;
+  //           hasErrors = true;
+  //         }
+  //       }
 
-        if (req.description) {
-          const descValidation = validateDescription(req.description);
-          if (!descValidation.valid) {
-            rowErrors.description = descValidation.error;
-            hasErrors = true;
-          }
-        }
+  //       if (req.description) {
+  //         const descValidation = validateDescription(req.description);
+  //         if (!descValidation.valid) {
+  //           rowErrors.description = descValidation.error;
+  //           hasErrors = true;
+  //         }
+  //       }
+  //     }
+
+  //     newErrors[index] = rowErrors;
+  //   });
+
+  //   // Mark all fields as touched
+  //   const allTouched = requests.map(() => ({
+  //     sourceIP: true,
+  //     destinationIP: true,
+  //     service: true,
+  //     description: true
+  //   }));
+  //   setTouchedFields(allTouched);
+
+  //   setValidationErrors(newErrors);
+  //   return !hasErrors;
+  // };
+
+  const validateRequestsBackend = async () => {
+    setIsValidating(true);
+    setValidationErrors([]);
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/api/v1/validate-requests`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ requests })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.valid) {
+        // Validation failed - show errors
+        setValidationErrors(data.validation_results || []);
+        setShowValidationModal(true);
+        return false;
       }
 
-      newErrors[index] = rowErrors;
-    });
+      // All valid
+      return true;
 
-    // Mark all fields as touched
-    const allTouched = requests.map(() => ({
-      sourceIP: true,
-      destinationIP: true,
-      service: true,
-      description: true
-    }));
-    setTouchedFields(allTouched);
-
-    setValidationErrors(newErrors);
-    return !hasErrors;
+    } catch (err) {
+      setSubmitError(`Validation failed: ${err.message}`);
+      return false;
+    } finally {
+      setIsValidating(false);
+    }
   };
 
-  // MODIFIED: Handle bulk submit with validation
+  // Handle bulk submit with validation
   const handleBulkSubmit = async (e) => {
     e.preventDefault();
     setSubmitError("");
@@ -786,11 +790,12 @@ function RequesterPage() {
       }
 
       // Validate all fields
-      if (!validateAllRequests()) {
-        setSubmitError('Please fix validation errors before submitting');
-        return;
-      }
+    const isValid = await validateRequestsBackend();
 
+    if (!isValid) {
+      setSubmitError('Please fix the validation errors highlighted below');
+      return;
+    }
       setLoading(true);
 
       const token = localStorage.getItem('token');
@@ -816,31 +821,13 @@ function RequesterPage() {
       );
 
       const responses = await Promise.all(submissionPromises);
-
-      // Check for backend validation errors
-      const backendErrors = [];
       for (let i = 0; i < responses.length; i++) {
-        if (!responses[i].ok) {
-          const errorData = await responses[i].json().catch(() => ({}));
+        const response = responses[i];
 
-          // Map backend errors to validation errors
-          if (errorData.details) {
-            const rowErrors = {};
-            errorData.details.forEach(error => {
-              if (error.includes('Source IP')) {
-                rowErrors.sourceIP = error.replace('Source IP - ', '');
-              } else if (error.includes('Destination IP')) {
-                rowErrors.destinationIP = error.replace('Destination IP - ', '');
-              } else if (error.includes('Service')) {
-                rowErrors.service = error.replace('Service - ', '');
-              } else if (error.includes('Description')) {
-                rowErrors.description = error.replace('Description - ', '');
-              }
-            });
-            backendErrors[i] = rowErrors;
-          }
-
-          throw new Error(`Request #${i + 1} failed: ${errorData.error || 'Unknown error'}`);
+        if (!response.ok) {
+          // If any request failed, try to get the error message
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || `Request #${i + 1} failed`);
         }
       }
 
@@ -856,9 +843,9 @@ function RequesterPage() {
       }]);
       setValidationErrors([{}]);
       setTouchedFields([{}]);
-      
+
       setSubmitSuccess(`✅ Successfully submitted ${requests.length} ACL request(s)! You can download an Excel report below.`);
-      
+
       setTimeout(() => setSubmitSuccess(""), 8000);
 
     } catch (err) {
@@ -868,17 +855,16 @@ function RequesterPage() {
     }
   };
 
-  // ... [Keep all other existing functions]
 
-  // Helper to check if field has error
-  const hasFieldError = (index, field) => {
-    return touchedFields[index]?.[field] && validationErrors[index]?.[field];
-  };
+  // // Helper to check if field has error
+  // const hasFieldError = (index, field) => {
+  //   return touchedFields[index]?.[field] && validationErrors[index]?.[field];
+  // };
 
-  // Helper to get field error message
-  const getFieldError = (index, field) => {
-    return validationErrors[index]?.[field] || '';
-  };
+  // // Helper to get field error message
+  // const getFieldError = (index, field) => {
+  //   return validationErrors[index]?.[field] || '';
+  // };
 
   if (loading && requests.length === 1 && !requests[0].system_type) {
     return <div className="loading">Loading form options...</div>;
@@ -948,225 +934,166 @@ function RequesterPage() {
                 <th className="required-field">Destination IP</th>
                 <th>Destination Host</th>
                 <th className="required-field">Service</th>
-                <th>Description</th>
-                <th className="required-field">Action</th>
+                <th style={{minWidth: '200px'}} >Description</th>
+                <th className="required-field" style={{minWidth: '120px'}}>Action</th>
                 <th>Remove</th>
               </tr>
             </thead>
             <tbody>
-              {requests.map((request, index) => (
-                <tr key={index}>
-                  {/* System Type */}
-                  <td>
-                    <select
-                      value={request.system_type}
-                      onChange={(e) => updateRequest(index, 'system_type', e.target.value)}
-                      required
-                    >
-                      <option value="">Select System Type</option>
-                      {options.system_types.map((systemType, idx) => (
-                        <option key={idx} value={systemType}>
-                          {systemType}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-
-                  {/* Category */}
-                  <td>
-                    {isOthersCategory(index) ? (
-                      <input
-                        type="text"
-                        value={request.category}
-                        onChange={(e) => updateRequest(index, 'category', e.target.value)}
-                        placeholder="Enter category"
-                        className="free-text-field"
-                      />
-                    ) : (
+              {requests.map((request, index) => {
+                const rowError = validationErrors.find(v => v.row_index === index);
+                return (
+                  <tr key={index} className={rowError && !rowError.valid ? 'error-row' : ''}>
+                    <td>
                       <select
-                        value={request.category}
-                        onChange={(e) => updateRequest(index, 'category', e.target.value)}
-                        disabled={!request.system_type}
+                        value={request.system_type}
+                        onChange={(e) => updateRequest(index, 'system_type', e.target.value)}
                         required
                       >
-                        <option value="">Select Category</option>
-                        {getFilteredCategories(index).map((cat, idx) => (
-                          <option key={idx} value={cat.value}>
-                            {cat.display}
-                          </option>
+                        <option value="">Select System Type</option>
+                        {options.system_types.map((st, idx) => (
+                          <option key={idx} value={st}>{st}</option>
                         ))}
                       </select>
-                    )}
-                  </td>
+                      {rowError?.errors?.system_type && (
+                        <div className="field-error">{rowError.errors.system_type}</div>
+                      )}
+                    </td>
 
-                  {/* Source IP - With Validation */}
-                  <td>
-                    <div className="combobox-container">
+                    <td>
+                      {request.system_type === "Others" ? (
+                        <input
+                          type="text"
+                          value={request.category}
+                          onChange={(e) => updateRequest(index, 'category', e.target.value)}
+                          placeholder="Enter category"
+                        />
+                      ) : (
+                        <select
+                          value={request.category}
+                          onChange={(e) => updateRequest(index, 'category', e.target.value)}
+                          disabled={!request.system_type}
+                          required
+                        >
+                          <option value="">Select Category</option>
+                          {getFilteredCategories(index).map((cat, idx) => (
+                            <option key={idx} value={cat.value}>{cat.display}</option>
+                          ))}
+                        </select>
+                      )}
+                    </td>
+
+                    <td>
                       <input
                         list={`sourceIP-options-${index}`}
                         value={request.sourceIP}
                         onChange={(e) => updateRequest(index, 'sourceIP', e.target.value)}
-                        onBlur={() => handleFieldBlur(index, 'sourceIP')}
-                        placeholder="Select or enter source IP"
-                        className={`combobox-input ${hasFieldError(index, 'sourceIP') ? 'input-error' : ''}`}
+                        placeholder="Source IP"
+                        className={rowError?.errors?.sourceIP ? 'input-error' : ''}
                         required
                       />
                       <datalist id={`sourceIP-options-${index}`}>
                         {getFilteredSourceIPs(index).map((ip, idx) => (
-                          <option
-                            key={idx}
-                            value={ip.value}
-                            data-has-dest={ip.hasCorrespondingDest}
-                          >
-                            {ip.value} {ip.hasCorrespondingDest ? "→ " + ip.correspondingDest : "(Source Only)"}
-                          </option>
+                          <option key={idx} value={ip.value} />
                         ))}
                       </datalist>
-                      {hasFieldError(index, 'sourceIP') && (
-                        <div className="field-error-message">
-                          {getFieldError(index, 'sourceIP')}
-                        </div>
+                      {rowError?.errors?.sourceIP && (
+                        <div className="field-error">{rowError.errors.sourceIP}</div>
                       )}
-                    </div>
-                  </td>
+                    </td>
 
-                  {/* Source Host */}
-                  <td>
-                    <div className="combobox-container">
+                    <td>
                       <input
-                        list={`sourceHost-options-${index}`}
+                        type="text"
                         value={request.sourceHost}
                         onChange={(e) => updateRequest(index, 'sourceHost', e.target.value)}
-                        placeholder="Select or enter source host"
-                        className={`combobox-input ${autoPopulatedFields[index]?.sourceHost ? 'auto-populated-field' : ''}`}
+                        placeholder="Source Host"
                       />
-                      <datalist id={`sourceHost-options-${index}`}>
-                        {getComboboxOptions('sourceHost', index).map((option, idx) => (
-                          <option key={idx} value={option} />
-                        ))}
-                      </datalist>
-                    </div>
-                  </td>
+                    </td>
 
-                  {/* Destination IP - With Validation */}
-                  <td>
-                    <div className="combobox-container">
+                    <td>
                       <input
                         list={`destinationIP-options-${index}`}
                         value={request.destinationIP}
                         onChange={(e) => updateRequest(index, 'destinationIP', e.target.value)}
-                        onBlur={() => handleFieldBlur(index, 'destinationIP')}
-                        placeholder="Select or enter destination IP"
-                        className={`combobox-input ${hasFieldError(index, 'destinationIP') ? 'input-error' : ''}`}
+                        placeholder="Destination IP"
+                        className={rowError?.errors?.destinationIP ? 'input-error' : ''}
                         required
                       />
                       <datalist id={`destinationIP-options-${index}`}>
                         {getFilteredDestinationIPs(index).map((ip, idx) => (
-                          <option
-                            key={idx}
-                            value={ip.value}
-                            data-has-source={ip.hasCorrespondingSource}
-                          >
-                            {ip.value} {ip.hasCorrespondingSource ? "→ " + ip.correspondingSource : "(Destination Only)"}
-                          </option>
+                          <option key={idx} value={ip.value} />
                         ))}
                       </datalist>
-                      {hasFieldError(index, 'destinationIP') && (
-                        <div className="field-error-message">
-                          {getFieldError(index, 'destinationIP')}
-                        </div>
+                      {rowError?.errors?.destinationIP && (
+                        <div className="field-error">{rowError.errors.destinationIP}</div>
                       )}
-                    </div>
-                  </td>
+                    </td>
 
-                  {/* Destination Host */}
-                  <td>
-                    <div className="combobox-container">
+                    <td>
                       <input
-                        list={`destinationHost-options-${index}`}
+                        type="text"
                         value={request.destinationHost}
                         onChange={(e) => updateRequest(index, 'destinationHost', e.target.value)}
-                        placeholder="Select or enter destination host"
-                        className={`combobox-input ${autoPopulatedFields[index]?.destinationHost ? 'auto-populated-field' : ''}`}
+                        placeholder="Destination Host"
                       />
-                      <datalist id={`destinationHost-options-${index}`}>
-                        {getComboboxOptions('destinationHost', index).map((option, idx) => (
-                          <option key={idx} value={option} />
-                        ))}
-                      </datalist>
-                    </div>
-                  </td>
+                    </td>
 
-                  {/* Service - With Validation */}
-                  <td>
-                    <div className="combobox-container">
+                    <td>
                       <input
-                        list={`service-options-${index}`}
+                        type="text"
                         value={request.service}
                         onChange={(e) => updateRequest(index, 'service', e.target.value)}
-                        onBlur={() => handleFieldBlur(index, 'service')}
-                        placeholder="Select or enter service"
-                        className={`combobox-input ${autoPopulatedFields[index]?.service ? 'auto-populated-field' : ''} ${hasFieldError(index, 'service') ? 'input-error' : ''}`}
+                        placeholder="Service"
+                        className={rowError?.errors?.service ? 'input-error' : ''}
                         required
                       />
-                      <datalist id={`service-options-${index}`}>
-                        {getComboboxOptions('service', index).map((option, idx) => (
-                          <option key={idx} value={option} />
-                        ))}
-                      </datalist>
-                      {hasFieldError(index, 'service') && (
-                        <div className="field-error-message">
-                          {getFieldError(index, 'service')}
-                        </div>
+                      {rowError?.errors?.service && (
+                        <div className="field-error">{rowError.errors.service}</div>
                       )}
-                    </div>
-                  </td>
+                    </td>
 
-                  {/* Description - With Validation */}
-                  <td>
-                    <input
-                      type="text"
-                      value={request.description}
-                      onChange={(e) => updateRequest(index, 'description', e.target.value)}
-                      onBlur={() => handleFieldBlur(index, 'description')}
-                      placeholder="Enter description"
-                      className={`combobox-input ${autoPopulatedFields[index]?.description ? 'auto-populated-field' : ''} ${hasFieldError(index, 'description') ? 'input-error' : ''}`}
-                    />
-                    {hasFieldError(index, 'description') && (
-                      <div className="field-error-message">
-                        {getFieldError(index, 'description')}
-                      </div>
-                    )}
-                  </td>
+                    <td>
+                      <textarea
+                        value={request.description}
+                        onChange={(e) => updateRequest(index, 'description', e.target.value)}
+                        placeholder="Description"
+                        className={rowError?.errors?.description ? 'input-error' : ''}
+                        style={{minWidth: '180px', minHeight: '40px'}}
+                      />
+                      {rowError?.errors?.description && (
+                        <div className="field-error">{rowError.errors.description}</div>
+                      )}
+                    </td>
 
-                  {/* Action */}
-                  <td>
-                    <select
-                      value={request.action}
-                      onChange={(e) => updateRequest(index, 'action', e.target.value)}
-                      required
-                    >
-                      <option value="">Select Action</option>
-                      <option value="allow">Allow</option>
-                      <option value="deny">Deny</option>
-                    </select>
-                  </td>
-
-                  {/* Remove */}
-                  <td className="Remove-cell">
-                    {requests.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeRequest(index)}
-                        className="btn-remove-row"
-                        title="Remove this request"
+                    <td>
+                      <select
+                        value={request.action}
+                        onChange={(e) => updateRequest(index, 'action', e.target.value)}
+                        required
+                        style={{minWidth: '100px'}}
                       >
-                        🗑️
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                        <option value="">Select</option>
+                        <option value="allow">Allow</option>
+                        <option value="deny">Deny</option>
+                      </select>
+                    </td>
+
+                    <td>
+                      {requests.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeRequest(index)}
+                          className="btn-remove-row"
+                        >
+                          🗑️
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              }
+              )}
             </tbody>
           </table>
         </div>
@@ -1210,7 +1137,7 @@ function RequesterPage() {
               </button>
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || isValidating}
                 className="btn-submit-requests"
               >
                 {loading ? "Submitting..." : `Submit ${requests.length} Request(s)`}
@@ -1221,7 +1148,7 @@ function RequesterPage() {
       </form>
 
       {/* Template Selection Modal */}
-      {showTemplates && (
+        {showTemplates && (
         <div className="modal-overlay" onClick={() => setShowTemplates(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
@@ -1236,16 +1163,18 @@ function RequesterPage() {
               ) : (
                 <div className="templates-list">
                   {templates.map(template => (
-                    <div key={template.id} className="template-item">
+                    <div key={template.template_name} className="template-item">
                       <h4>{template.template_name}</h4>
-                      <p><strong>System:</strong> {template.system_type}</p>
-                      <p><strong>Category:</strong> {template.category}</p>
-                      <p><strong>Service:</strong> {template.service}</p>
-                      <button
-                        onClick={() => loadTemplate(template, 0)}
-                        className="btn-use-template"
-                      >
-                        Use Template
+                      <p><strong>Rules:</strong> {template.rule_count}</p>
+                      <div style={{fontSize: '12px', color: '#666', marginBottom: '10px'}}>
+                        {template.rules.map((rule, idx) => (
+                          <div key={idx}>
+                            {idx + 1}. {rule.system_type} - {rule.category} ({rule.service})
+                          </div>
+                        ))}
+                      </div>
+                      <button onClick={() => loadTemplate(template)} className="btn-use-template">
+                        Use Template ({template.rule_count} rules)
                       </button>
                     </div>
                   ))}
@@ -1255,6 +1184,37 @@ function RequesterPage() {
           </div>
         </div>
       )}
+
+      {/* Validation Errors Modal */}
+      {showValidationModal && validationErrors.length > 0 && (
+        <div className="modal-overlay" onClick={() => setShowValidationModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>⚠️ Validation Errors</h2>
+              <button className="close-btn" onClick={() => setShowValidationModal(false)}>×</button>
+            </div>
+            <div className="modal-body">
+              <p>Please fix the following errors before submitting:</p>
+              {validationErrors.filter(v => !v.valid).map((result, idx) => (
+                <div key={idx} className="validation-error-item">
+                  <h4>Request #{result.row_index + 1}:</h4>
+                  <ul>
+                    {Object.entries(result.errors).map(([field, error]) => (
+                      <li key={field}><strong>{field}:</strong> {error}</li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+            <div className="modal-footer">
+              <button onClick={() => setShowValidationModal(false)} className="btn-secondary">
+                Close and Fix Errors
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {/* Help Modal */}
       {showHelp && (
@@ -1369,7 +1329,7 @@ function RequesterPage() {
       border: 2px solid #dc3545 !important;
       background-color: #fff5f5 !important;
     }
-    
+
     .field-error-message {
       color: #dc3545;
       font-size: 11px;
@@ -1382,19 +1342,19 @@ function RequesterPage() {
       z-index: 100;
       max-width: 200px;
     }
-    
+
     .combobox-container {
       position: relative;
     }
-    
+
     .validation-error-row {
       background-color: #fff5f5;
     }
-    
+
     .validation-errors-cell {
       padding: 10px !important;
     }
-    
+
     .validation-errors-container {
       background-color: #f8d7da;
       border: 1px solid #f5c6cb;
@@ -1402,21 +1362,21 @@ function RequesterPage() {
       padding: 10px;
       color: #721c24;
     }
-    
+
     .validation-errors-container strong {
       display: block;
       margin-bottom: 8px;
     }
-    
+
     .validation-errors-container ul {
       margin: 0;
       padding-left: 20px;
     }
-    
+
     .validation-errors-container li {
       margin: 5px 0;
     }
-    
+
     .success-message {
       background-color: #d4edda;
       color: #155724;
@@ -1425,7 +1385,7 @@ function RequesterPage() {
       margin-bottom: 20px;
       border: 1px solid #c3e6cb;
     }
-    
+
     .error-message {
       background-color: #f8d7da;
       color: #721c24;
