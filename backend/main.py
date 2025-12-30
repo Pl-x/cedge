@@ -1385,24 +1385,6 @@ def auto_populate_fields():
                         "rule_id": rule.id #included for verification
                     })
                 return jsonify({'error': 'No matching rules Found'}), 200
-
-            # Fallback: return first rule in category as template
-            # template_rule = FirewallRule.query.filter_by(
-            #     system_type=system_type,
-            #     category=category
-            # ).first()
-
-            # if template_rule:
-            #     return jsonify({
-            #         "source_ip": template_rule.source_ip or "",
-            #         "source_host": template_rule.source_host or "",
-            #         "destination_ip": template_rule.destination_ip or "",
-            #         "destination_host": template_rule.destination_host or "",
-            #         "service": template_rule.service or "",
-            #         "description": template_rule.description or "",
-            #         "is_template": True
-            #     })
-
             return jsonify({"error": "No Source ip or destination ip has been provided"}), 200
 
     except Exception as e:
