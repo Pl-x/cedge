@@ -246,11 +246,6 @@ function ReviewerPage() {
         <td>{req.destination_ip}</td>
         <td><span className="code-pill">{req.service}</span></td>
         <td><span className={`status-pill ${req.status?.toLowerCase()}`}>{req.status}</span></td>
-        <td>
-        <button className="btn-sm" onClick={() => { setSelectedRequest(req); setShowDetails(true); }}>
-        Review
-        </button>
-        </td>
         </tr>
       ))
     )}
@@ -323,14 +318,14 @@ function ReviewerPage() {
       </div>
       </div>
 
-      <div className="modal-footer">
+      {/* <div className="modal-footer">
       <button className="btn-reject-lg" onClick={() => updateRequestStatus(selectedRequest.id, 'Rejected', 'Rejected by reviewer')}>
       ✕ Reject
       </button>
       <button className="btn-approve-lg" onClick={() => updateRequestStatus(selectedRequest.id, 'Approved', 'Approved by reviewer')}>
       ✓ Approve
       </button>
-      </div>
+      </div> */}
       </div>
       </div>
     )}

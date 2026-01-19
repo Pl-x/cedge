@@ -15,6 +15,7 @@ import os
 
 from models import ACLRequest, FirewallRule, User, Templates
 from config import create_app, GOOGLE_SHEETS, db
+from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 
 app = create_app()
 
@@ -729,9 +730,14 @@ def validate_request_payload(data: dict) -> List[str]:
     errors = []
     
     required_fields = ['sourceIP', 'destinationIP', 'service', 'description']
+
+    system_type = data.get('system_type', '')
+
     
     for field in required_fields:
         if field not in data or not data[field]:
+            if system_type == 'Template' and field == 'description':
+                continue
             errors.append(f"missing required field {field}")
             
     # if missing required fields return early
@@ -1001,6 +1007,13 @@ def get_mysql_options():
             # Get unique system_types
             system_types = list(
                 set([rule.system_type for rule in all_rules if rule.system_type]))
+
+             if "Template" not in system_types:
+                system_types.append("Template")
+            if "Others" not in system_types:
+                system_types.append("Others")
+
+            system_types=sorted(system_types)
 
             # Get categories with their system_types
             categories = []
@@ -1716,70 +1729,86 @@ def get_grouped_templates(current_user):
 
 @app.route('/api/v1/validate-requests', methods=['POST'])
 @token_required()
-def validate_requests_backend(current_user):
-    """Validate all requests and return detailed errors"""
+def validate_requests(current_user):
+    """Validate all requests with detailed error reporting"""
     try:
         data = request.get_json()
-        
+
         if not data or 'requests' not in data:
             return jsonify({'error': 'No requests provided'}), 400
-        
+
         requests_data = data['requests']
         validation_results = []
         has_errors = False
-        
+
         for idx, req in enumerate(requests_data):
             row_errors = {}
-            
+
+            # Validate System Type
+            if not req.get('system_type'):
+                row_errors['system_type'] = 'System Type is required'
+                has_errors = True
+
+            # Validate Category (unless "Others")
+            if req.get('system_type') != 'Others' and not req.get('category'):
+                row_errors['category'] = 'Category is required'
+                has_errors = True
+
             # Validate Source IP
-            if 'sourceIP' in req:
-                source_valid = validate_ip(req['sourceIP'])
-                if not source_valid[0]:
-                    row_errors['sourceIP'] = source_valid[1]
+            if 'sourceIP' in req and req['sourceIP']:
+                source_valid, source_error = validate_ip(req['sourceIP'])
+                if not source_valid:
+                    row_errors['sourceIP'] = source_error
                     has_errors = True
             else:
                 row_errors['sourceIP'] = 'Source IP is required'
                 has_errors = True
-            
+
             # Validate Destination IP
-            if 'destinationIP' in req:
-                dest_valid = validate_ip(req['destinationIP'])
-                if not dest_valid[0]:
-                    row_errors['destinationIP'] = dest_valid[1]
+            if 'destinationIP' in req and req['destinationIP']:
+                dest_valid, dest_error = validate_ip(req['destinationIP'])
+                if not dest_valid:
+                    row_errors['destinationIP'] = dest_error
                     has_errors = True
             else:
                 row_errors['destinationIP'] = 'Destination IP is required'
                 has_errors = True
-            
+
             # Validate Service
-            if 'service' in req:
-                service_valid = validate_service(req['service'])
-                if not service_valid[0]:
-                    row_errors['service'] = service_valid[1]
+            if 'service' in req and req['service']:
+                service_valid, service_error = validate_service(req['service'])
+                if not service_valid:
+                    row_errors['service'] = service_error
                     has_errors = True
             else:
                 row_errors['service'] = 'Service is required'
                 has_errors = True
-            
-            # Validate Description (if provided)
-            if 'description' in req and req['description']:
-                desc_valid = validate_description(req['description'])
-                if not desc_valid[0]:
-                    row_errors['description'] = desc_valid[1]
+
+            # Validate Description (if provided and not empty)
+            if 'description' in req and req['description'] and req['description'].strip():
+                desc_valid, desc_error = validate_description(req['description'])
+                if not desc_valid:
+                    row_errors['description'] = desc_error
                     has_errors = True
-            
+
+            # Validate Action
+            if not req.get('action'):
+                row_errors['action'] = 'Action (allow/deny) is required'
+                has_errors = True
+
             validation_results.append({
                 'row_index': idx,
                 'valid': len(row_errors) == 0,
                 'errors': row_errors
             })
-        
+
         return jsonify({
             'valid': not has_errors,
             'validation_results': validation_results,
-            'error_count': sum(1 for r in validation_results if not r['valid'])
+            'error_count': sum(1 for r in validation_results if not r['valid']),
+            'total_count': len(requests_data)
         }), 200 if not has_errors else 400
-        
+
     except Exception as e:
         return jsonify({'error': f'Validation failed: {str(e)}'}), 500
 
@@ -1969,10 +1998,246 @@ def get_template_by_id(current_user, id):
         return jsonify({'error': f"Failed to fetch template. {str(e)}"}), 500
 
 
+
+# single excel generation per request submission
+@app.route('/api/v1/generate-xlsx/submission', methods=['POST'])
+@token_required()
+def generate_submission_xlsx(current_user):
+    '''Generate color-coded Excel file for a specific submission'''
+    try:
+        data = request.get_json()
+
+        # Expect array of request IDs or request data from current submission
+        if 'request_ids' in data:
+            # Fetch by IDs
+            request_ids = data['request_ids']
+            requests = ACLRequest.query.filter(ACLRequest.id.in_(request_ids)).all()
+        elif 'requests' in data:
+            # Create from submitted data (for immediate download after submission)
+            requests = data['requests']
+        else:
+            return jsonify({'error': 'No requests provided'}), 400
+
+        if not requests:
+            return jsonify({'error': 'No ACL requests found'}), 404
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "ACL Requests"
+
+        # Define colors for different statuses and system types
+        status_colors = {
+            'Pending': 'FFF3CD',      # Yellow
+            'Approved': 'D4EDDA',     # Green
+            'Rejected': 'F8D7DA',     # Red
+            'Completed': 'D1ECF1'     # Blue
+        }
+
+        system_type_colors = {
+            'Others': 'FFE699',      # Light orange for manual "Others"
+            'Template': 'E2EFDA',    # Light green for template-based entries
+        }
+
+        # Color for "Others" system type
+        others_row_color = 'FFE699'  # Light orange for "Others"
+
+        # Define header style
+        header_fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
+        header_font = Font(bold=True, color='FFFFFF', size=11)
+        header_alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+
+        # Define border style
+        thin_border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+
+        # Headers
+        headers = [
+            'Request ID', 'Requester', 'System Type', 'Category', 'Source IP',
+            'Source Host', 'Destination IP', 'Destination Host',
+            'Service', 'Reason', 'Status', 'Created At'
+        ]
+        ws.append(headers)
+
+        # Style header row
+        for cell in ws[1]:
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = header_alignment
+            cell.border = thin_border
+
+        # Add data rows with conditional formatting
+        for row_idx, req in enumerate(requests, start=2):
+            # Handle both ACLRequest objects and dict data
+            if isinstance(req, dict):
+                request_data = [
+                    req.get('id', 'N/A'),
+                    req.get('requester', current_user.username),
+                    req.get('system_type', ''),
+                    req.get('category', ''),
+                    req.get('sourceIP', ''),
+                    req.get('sourceHost', ''),
+                    req.get('destinationIP', ''),
+                    req.get('destinationHost', ''),
+                    req.get('service', ''),
+                    req.get('description', ''),
+                    req.get('status', 'Pending'),
+                    datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                ]
+                system_type = req.get('system_type', '')
+                status = req.get('status', 'Pending')
+            else:
+                request_data = [
+                    req.id,
+                    req.requester,
+                    req.system_type,
+                    req.category,
+                    req.source_ip,
+                    req.source_host,
+                    req.destination_ip,
+                    req.destination_host,
+                    req.service,
+                    req.reason,
+                    req.status,
+                    req.created_at.strftime("%Y-%m-%d %H:%M:%S") if req.created_at else 'N/A'
+                ]
+                system_type = req.system_type
+                status = req.status
+
+            ws.append(request_data)
+
+            # NEW: Determine row background color based on system_type
+            is_others_system = system_type == 'Others'
+            is_template_system = system_type == 'Template'
+
+            # Get the status color for this row
+            status_color = status_colors.get(status, 'FFFFFF')
+            status_fill = PatternFill(start_color=status_color, end_color=status_color, fill_type='solid')
+
+            # NEW: Row fill for "Others" system type
+            others_fill = PatternFill(start_color=others_row_color, end_color=others_row_color, fill_type='solid')
+
+            if is_others_system:
+                row_fill = PatternFill(
+                    start_color=system_type_colors['Others'],
+                    end_color=system_type_colors['Others'],
+                    fill_type='solid'
+                )
+            elif is_template_system:
+                row_fill = PatternFill(
+                    start_color=system_type_colors['Template'],
+                    end_color=system_type_colors['Template'],
+                    fill_type='solid'
+                )
+            else:
+                row_fill=None
+
+            # Apply styling to each cell in the row
+            for col_idx, cell in enumerate(ws[row_idx], start=1):
+                cell.border = thin_border
+                cell.alignment = Alignment(vertical='center', wrap_text=True)
+
+                if row_fill and col_idx != 11:
+                    cell.fill = row_fill
+                    if is_others_system:
+                        cell.font = Font(italic=True)
+                    elif is_template_system:
+                        cell.font = Font(bold=True, color='2F5233')
+
+                # If this is an "Others" row, apply yellow/orange background to entire row
+                if is_others_system and col_idx != 11:  # All columns except Status
+                    cell.fill = others_fill
+                    # Add italic font to distinguish "Others" entries
+                    cell.font = Font(italic=True)
+
+                # Color code the Status column (column 11)
+                if col_idx == 11:
+                    cell.fill = status_fill
+                    cell.font = Font(bold=True)
+                    cell.alignment = Alignment(horizontal='center', vertical='center')
+
+                # Highlight IP addresses (columns 5, 7) - only if NOT "Others"
+                elif col_idx in [5, 7] and not is_others_system:
+                    cell.fill = PatternFill(start_color='E7E6E6', end_color='E7E6E6', fill_type='solid')
+                    cell.font = Font(name='Courier New')
+
+                # Highlight Service (column 9) - only if NOT "Others"
+                elif col_idx == 9 and not is_others_system:
+                    cell.fill = PatternFill(start_color='FCE4D6', end_color='FCE4D6', fill_type='solid')
+                    cell.font = Font(name='Courier New')
+
+                # NEW: Highlight System Type column (column 3) for "Others"
+                elif col_idx == 3 and is_others_system:
+                    cell.fill = PatternFill(start_color='FF9900', end_color='FF9900', fill_type='solid')
+                    cell.font = Font(bold=True, color='FFFFFF')
+
+        # Auto-adjust column widths
+        for column in ws.columns:
+            max_length = 0
+            column_letter = column[0].column_letter
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(cell.value)
+                except:
+                    pass
+            adjusted_width = min(max_length + 3, 50)
+            ws.column_dimensions[column_letter].width = adjusted_width
+
+        # Freeze the header row
+        ws.freeze_panes = 'A2'
+
+        # Add filters to header row
+        ws.auto_filter.ref = ws.dimensions
+
+        # Add legend for color coding
+        legend_row = len(requests) + 3
+        ws[f'A{legend_row}'] = 'Color Legend:'
+        ws[f'A{legend_row}'].font = Font(bold=True)
+
+        ws[f'A{legend_row + 1}'] = 'Green highlight = "Template" system type (from saved template)'
+        ws[f'A{legend_row + 1}'].fill = PatternFill(
+            start_color='E2EFDA', end_color='E2EFDA', fill_type='solid'
+        )
+
+        ws[f'A{legend_row + 2}'] = 'Orange highlight = "Others" system type (manual entry)'
+        ws[f'A{legend_row + 2}'].fill = PatternFill(
+            start_color='FFE699', end_color='FFE699', fill_type='solid'
+        )
+
+        ws[f'A{legend_row + 2}'] = 'Yellow status = Pending'
+        ws[f'A{legend_row + 2}'].fill = PatternFill(start_color='FFF3CD', end_color='FFF3CD', fill_type='solid')
+
+        ws[f'A{legend_row + 3}'] = 'Green status = Approved'
+        ws[f'A{legend_row + 3}'].fill = PatternFill(start_color='D4EDDA', end_color='D4EDDA', fill_type='solid')
+
+        file_stream = BytesIO()
+        wb.save(file_stream)
+        file_stream.seek(0)
+
+        # Filename includes submission timestamp and request count
+        submission_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f'acl_submission_{len(requests)}requests_{submission_time}.xlsx'
+
+        return send_file(
+            file_stream,
+            as_attachment=True,
+            download_name=filename,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+    except Exception as e:
+        print(f"Error generating submission Excel: {e}")
+        return jsonify({'error': f'Failed to generate Excel report: {str(e)}'}), 500
+
+
+
 @app.route('/api/v1/generate-xlsx', methods=['GET'])
 @token_required()
-def generate_xlsx(current_user):
-    '''generate excel file after submission'''
+def generate_xlsx_enhanced(current_user):
+    '''Generate color-coded Excel file after submission'''
     try:
         if current_user.role != 'admin':
             requests = ACLRequest.query.filter_by(requester=current_user.username).order_by(
@@ -1980,28 +2245,56 @@ def generate_xlsx(current_user):
         else:
             requests = ACLRequest.query.order_by(
                 ACLRequest.created_at.desc()).all()
-        
+
         if not requests:
             return jsonify({'error': 'No ACL requests found to generate report'}), 404
-        
+
         wb = openpyxl.Workbook()
         ws = wb.active
-        ws.title = "ACL Requests"
-        
+        ws.title = "All ACL Requests"
+
+        # Define colors for different statuses
+        status_colors = {
+            'Pending': 'FFF3CD',      # Yellow
+            'Approved': 'D4EDDA',     # Green
+            'Rejected': 'F8D7DA',     # Red
+            'Completed': 'D1ECF1'     # Blue
+        }
+        others_row_color = 'FFE699'
+
+        # Define header style
+        header_fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
+        header_font = Font(bold=True, color='FFFFFF', size=11)
+        header_alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+
+        # Define border style
+        thin_border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+
+        # Headers
         headers = [
-            'Request ID', 'Requester', 'System Type', 'Category', 'Source IP', 
-            'Source Host', 'Destination IP', 'Destination Host', 
+            'Request ID', 'Requester', 'System Type', 'Category', 'Source IP',
+            'Source Host', 'Destination IP', 'Destination Host',
             'Service', 'Reason', 'Status', 'Created At'
         ]
         ws.append(headers)
-        
+
+        # Style header row
         for cell in ws[1]:
-            cell.font = openpyxl.styles.Font(bold=True)
-        
-        for req in requests:
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = header_alignment
+            cell.border = thin_border
+
+        # Add data rows with conditional formatting
+        for row_idx, req in enumerate(requests, start=2):
             ws.append([
                 req.id,
-                req.requester,  
+                req.requester,
                 req.system_type,
                 req.category,
                 req.source_ip,
@@ -2013,7 +2306,39 @@ def generate_xlsx(current_user):
                 req.status,
                 req.created_at.strftime("%Y-%m-%d %H:%M:%S") if req.created_at else 'N/A'
             ])
-        
+
+            # Get the status color for 'others' row
+            is_others_system = system_type == 'Others'
+
+            # Get the status color for this row
+            status_color = status_colors.get(status, 'FFFFFF')
+            status_fill = PatternFill(start_color=status_color, end_color=status_color, fill_type='solid')
+
+            # Row fill for "Others" system type
+            others_fill = PatternFill(start_color=others_row_color, end_color=others_row_color, fill_type='solid')
+
+            # Apply styling to each cell in the row
+            for col_idx, cell in enumerate(ws[row_idx], start=1):
+                cell.border = thin_border
+                cell.alignment = Alignment(vertical='center', wrap_text=True)
+
+                # Color code the Status column (column 11)
+                if col_idx == 11:
+                    cell.fill = status_fill
+                    cell.font = Font(bold=True)
+                    cell.alignment = Alignment(horizontal='center', vertical='center')
+
+                # Highlight IP addresses (columns 5, 7)
+                elif col_idx in [5, 7]:
+                    cell.fill = PatternFill(start_color='E7E6E6', end_color='E7E6E6', fill_type='solid')
+                    cell.font = Font(name='Courier New')
+
+                # Highlight Service (column 9)
+                elif col_idx == 9:
+                    cell.fill = PatternFill(start_color='FCE4D6', end_color='FCE4D6', fill_type='solid')
+                    cell.font = Font(name='Courier New')
+
+        # Auto-adjust column widths
         for column in ws.columns:
             max_length = 0
             column_letter = column[0].column_letter
@@ -2023,15 +2348,21 @@ def generate_xlsx(current_user):
                         max_length = len(cell.value)
                 except:
                     pass
-            adjusted_width = min(max_length + 2, 50)
+            adjusted_width = min(max_length + 3, 50)
             ws.column_dimensions[column_letter].width = adjusted_width
-        
+
+        # Freeze the header row
+        ws.freeze_panes = 'A2'
+
+        # Add filters to header row
+        ws.auto_filter.ref = ws.dimensions
+
         file_stream = BytesIO()
         wb.save(file_stream)
         file_stream.seek(0)
-        
+
         filename = f'acl_requests_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
-        
+
         return send_file(
             file_stream,
             as_attachment=True,
@@ -2095,7 +2426,7 @@ def get_help(current_user):
             
             'bulk_operations': 'Use "Add Another Request" to create multiple ACL requests at once. All will be validated before submission.',
             
-            'export': f'{"Admins" if current_user.role == "admin" else "You"} can download Excel reports of ACL requests via /api/v1/generate-xlsx',
+            'export': f'{"Admins" if current_user.role == "admin" else "You"} can download Excel reports of ACL requests',
             
             'contact_support': {
                 'email': 'support@example.com',
@@ -2106,6 +2437,156 @@ def get_help(current_user):
         return jsonify(help_info), 200
     except Exception as e:
         return jsonify({'error': f"Failed to retrieve help: {str(e)}"}), 500
+
+
+@app.route('/acl_requests/<int:request_id>', methods=['GET'])
+@token_required()
+def get_acl_request_detail(current_user, request_id):
+    """Get detailed information about a specific ACL request"""
+    try:
+        acl_request = ACLRequest.query.get(request_id)
+
+        if not acl_request:
+            return jsonify({'error': 'Request not found'}), 404
+
+        # Check permissions
+        if current_user.role not in ['admin'] and acl_request.requester != current_user.username:
+            return jsonify({'error': 'Unauthorized access'}), 403
+
+        return jsonify({
+            'request': acl_request.to_json()
+        }), 200
+
+    except Exception as e:
+        return jsonify({'error': f'Failed to fetch request: {str(e)}'}), 500
+
+
+@app.route('/acl_requests/<int:request_id>', methods=['PUT'])
+@token_required()
+def update_acl_request_status(current_user, request_id):
+    """Update ACL request status (approve/reject)"""
+    try:
+        if current_user.role not in ['admin']:
+            return jsonify({'error': 'Unauthorized'}), 403
+
+        acl_request = ACLRequest.query.get(request_id)
+        if not acl_request:
+            return jsonify({'error': 'Request not found'}), 404
+
+        data = request.get_json()
+
+        if 'status' in data:
+            acl_request.status = data['status']
+
+        if 'comments' in data:
+            # Add comment to comments array
+            if not acl_request.comments:
+                acl_request.comments = []
+
+            comment = {
+                'author': data.get('updated_by', current_user.username),
+                'comment': data['comments'],
+                'timestamp': datetime.utcnow().isoformat()
+            }
+            acl_request.comments.append(comment)
+
+        acl_request.updated_at = datetime.utcnow()
+        db.session.commit()
+
+        return jsonify({
+            'message': 'Request updated successfully',
+            'request': acl_request.to_json()
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Failed to update request: {str(e)}'}), 500
+
+
+# Add comment to ACL request
+@app.route('/acl_requests/<int:request_id>/comment', methods=['POST'])
+@token_required()
+def add_comment_to_request(current_user, request_id):
+    """Add a comment to an ACL request"""
+    try:
+        acl_request = ACLRequest.query.get(request_id)
+        if not acl_request:
+            return jsonify({'error': 'Request not found'}), 404
+
+        data = request.get_json()
+        if not data.get('comment'):
+            return jsonify({'error': 'Comment text is required'}), 400
+
+        if not acl_request.comments:
+            acl_request.comments = []
+
+        new_comment = {
+            'author': data.get('author', current_user.username),
+            'comment': data['comment'],
+            'timestamp': data.get('timestamp', datetime.utcnow().isoformat())
+        }
+
+        acl_request.comments.append(new_comment)
+        db.session.commit()
+
+        return jsonify({
+            'message': 'Comment added successfully',
+            'comment': new_comment
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Failed to add comment: {str(e)}'}), 500
+
+
+# Get template dropdown options from database
+@app.route('/api/v1/templates/dropdown-options', methods=['GET'])
+@token_required()
+def get_template_dropdown_options(current_user):
+    """Get unique values for template dropdowns from database"""
+    try:
+        # Get all active firewall rules for dropdown population
+        all_rules = FirewallRule.query.all()
+
+        # Extract unique values
+        system_types = sorted(list(set([rule.system_type for rule in all_rules if rule.system_type])))
+        categories = sorted(list(set([rule.category for rule in all_rules if rule.category])))
+        services = sorted(list(set([rule.service for rule in all_rules if rule.service])))
+
+        # Get unique source IPs with their details
+        source_ips = []
+        seen_sources = set()
+        for rule in all_rules:
+            if rule.source_ip and rule.source_ip not in seen_sources:
+                source_ips.append({
+                    'ip': rule.source_ip,
+                    'host': rule.source_host or '',
+                    'display': f"{rule.source_ip} ({rule.source_host})" if rule.source_host else rule.source_ip
+                })
+                seen_sources.add(rule.source_ip)
+
+        # Get unique destination IPs with their details
+        destination_ips = []
+        seen_dests = set()
+        for rule in all_rules:
+            if rule.destination_ip and rule.destination_ip not in seen_dests:
+                destination_ips.append({
+                    'ip': rule.destination_ip,
+                    'host': rule.destination_host or '',
+                    'display': f"{rule.destination_ip} ({rule.destination_host})" if rule.destination_host else rule.destination_ip
+                })
+                seen_dests.add(rule.destination_ip)
+
+        return jsonify({
+            'system_types': system_types,
+            'categories': categories,
+            'services': services,
+            'source_ips': source_ips,
+            'destination_ips': destination_ips
+        }), 200
+
+    except Exception as e:
+        return jsonify({'error': f'Failed to fetch dropdown options: {str(e)}'}), 500
 
 
 @app.route('/health', methods=['GET'])

@@ -12,6 +12,14 @@ const TemplatesPage = () => {
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [userRole, setuserRole] = useState('');
     const [filters, setFilters] = useState({ system_type: '', category: '', requester: '' });
+    const [dropdownOptions, setDropdownOptions] = useState({
+        system_types: [],
+        categories: [],
+        services: [],
+        source_ips: [],
+        destination_ips: []
+    });
+    const [loadingOptions, setLoadingOptions] = useState(false);
 
     // Theme State
     const [isDarkMode, setIsDarkMode] = useState(true);
@@ -32,6 +40,28 @@ const TemplatesPage = () => {
         }
         fetchTemplates();
     }, []);
+
+    const fetchDropdownOptions = async () => {
+        setLoadingOptions(true);
+        try {
+            const response = await fetchWithAuth(`${API_BASE_URL}/api/v1/templates/dropdown-options`);
+            const data = await response.json();
+            if (response.ok) {
+                setDropdownOptions(data);
+            }
+        } catch (err) {
+            console.error('Failed to load dropdown options:', err);
+        } finally {
+            setLoadingOptions(false);
+        }
+    };
+
+    // Fetch options when create modal opens
+    useEffect(() => {
+        if (showCreateModal) {
+            fetchDropdownOptions();
+        }
+    }, [showCreateModal]);
 
     const fetchTemplates = async () => {
         setLoading(true);
@@ -94,6 +124,72 @@ const TemplatesPage = () => {
                 setTimeout(() => setSuccess(''), 3000);
             }
         } catch(e) { setError('Failed to use template'); }
+    };
+
+    const renderRuleInput = (idx, rule, field, label, placeholder) => {
+        let options = [];
+        let isDropdownField = false;
+
+        switch (field) {
+            case 'system_type':
+                options = dropdownOptions.system_types;
+                isDropdownField = true;
+                break;
+            case 'category':
+                options = dropdownOptions.categories;
+                isDropdownField = true;
+                break;
+            case 'service':
+                options = dropdownOptions.services;
+                isDropdownField = true;
+                break;
+            case 'source_ip':
+                options = dropdownOptions.source_ips.map(ip => ip.display);
+                isDropdownField = true;
+                break;
+            case 'destination_ip':
+                options = dropdownOptions.destination_ips.map(ip => ip.display);
+                isDropdownField = true;
+                break;
+        }
+
+        if (isDropdownField && options.length > 0) {
+            return (
+                <div className="field">
+                <label>{label}</label>
+                <div className="combo-input">
+                <input
+                list={`${field}-${idx}`}
+                required
+                value={rule[field]}
+                onChange={e => updateRule(idx, field, e.target.value)}
+                placeholder={`Select or type ${placeholder}`}
+                />
+                <datalist id={`${field}-${idx}`}>
+                {options.map((opt, i) => (
+                    <option key={i} value={opt} />
+                ))}
+                </datalist>
+                </div>
+                <small style={{color: 'var(--text-light)', fontSize: '0.75rem'}}>
+                Select from dropdown or type custom value
+                </small>
+                </div>
+            );
+        }
+
+        // Fallback to regular input
+        return (
+            <div className="field">
+            <label>{label}</label>
+            <input
+            required
+            value={rule[field]}
+            onChange={e => updateRule(idx, field, e.target.value)}
+            placeholder={placeholder}
+            />
+            </div>
+        );
     };
 
     return (
@@ -169,60 +265,115 @@ const TemplatesPage = () => {
             onChange={e => setTemplateName(e.target.value)}
             placeholder="e.g. Windows Web Server Bundle"
             />
+            <small style={{color: 'var(--text-light)', marginTop: '0.5rem', display: 'block'}}>
+            Give your template a descriptive name
+            </small>
             </div>
+
+            {loadingOptions && (
+                <div style={{padding: '1rem', textAlign: 'center', color: 'var(--text-light)'}}>
+                Loading dropdown options...
+                </div>
+            )}
 
             <div className="rules-container">
             {rules.map((rule, idx) => (
                 <div key={idx} className="rule-card">
                 <div className="rule-header">
                 <h4>Rule #{idx + 1}</h4>
-                {rules.length > 1 && <button type="button" className="btn-remove" onClick={() => removeRule(idx)}>Remove</button>}
+                {rules.length > 1 && (
+                    <button type="button" className="btn-remove" onClick={() => removeRule(idx)}>
+                    Remove
+                    </button>
+                )}
                 </div>
                 <div className="rule-grid">
+                {renderRuleInput(idx, rule, 'system_type', 'System Type', 'system type')}
+                {renderRuleInput(idx, rule, 'category', 'Category', 'category')}
+                {renderRuleInput(idx, rule, 'source_ip', 'Source IP', '10.0.0.1')}
+
                 <div className="field">
-                <label>System Type</label>
-                <input required value={rule.system_type} onChange={e => updateRule(idx, 'system_type', e.target.value)} />
+                <label>Source Host (Optional)</label>
+                <input
+                value={rule.source_host}
+                onChange={e => updateRule(idx, 'source_host', e.target.value)}
+                placeholder="e.g. web-server-01"
+                />
                 </div>
+
+                {renderRuleInput(idx, rule, 'destination_ip', 'Destination IP', '192.168.1.5')}
+
                 <div className="field">
-                <label>Category</label>
-                <input required value={rule.category} onChange={e => updateRule(idx, 'category', e.target.value)} />
+                <label>Destination Host (Optional)</label>
+                <input
+                value={rule.destination_host}
+                onChange={e => updateRule(idx, 'destination_host', e.target.value)}
+                placeholder="e.g. db-server-01"
+                />
                 </div>
-                <div className="field">
-                <label>Source IP</label>
-                <input required value={rule.source_ip} onChange={e => updateRule(idx, 'source_ip', e.target.value)} placeholder="10.0.0.1" />
-                </div>
-                <div className="field">
-                <label>Dest IP</label>
-                <input required value={rule.destination_ip} onChange={e => updateRule(idx, 'destination_ip', e.target.value)} placeholder="192.168.1.5" />
-                </div>
+
                 <div className="field full">
                 <label>Service / Port</label>
-                <input required value={rule.service} onChange={e => updateRule(idx, 'service', e.target.value)} placeholder="tcp/443, tcp/80" />
+                {renderRuleInput(idx, rule, 'service', 'Service', 'tcp/443, http')}
                 </div>
-                {/* ADDED DESCRIPTION FIELD HERE */}
+
                 <div className="field full">
                 <label>Description</label>
-                <input
+                <textarea
                 value={rule.description}
                 onChange={e => updateRule(idx, 'description', e.target.value)}
-                placeholder="Reason for this rule..."
+                placeholder="Describe the purpose of this rule..."
+                rows={3}
+                style={{
+                    width: '100%',
+                    padding: '8px',
+                    border: '1px solid var(--border)',
+                                       borderRadius: '4px',
+                                       background: 'var(--input-bg)',
+                                       color: 'var(--text-main)',
+                                       fontFamily: 'inherit',
+                                       resize: 'vertical'
+                }}
                 />
+                </div>
+
+                <div className="field">
+                <label>Action</label>
+                <select
+                value={rule.action}
+                onChange={e => updateRule(idx, 'action', e.target.value)}
+                style={{
+                    padding: '8px',
+                    border: '1px solid var(--border)',
+                                       borderRadius: '4px',
+                                       background: 'var(--input-bg)',
+                                       color: 'var(--text-main)'
+                }}
+                >
+                <option value="allow">Allow</option>
+                <option value="deny">Deny</option>
+                </select>
                 </div>
                 </div>
                 </div>
             ))}
-            <button type="button" className="btn-add" onClick={addRule}>+ Add Another Rule</button>
+            <button type="button" className="btn-add" onClick={addRule}>
+            + Add Another Rule
+            </button>
             </div>
 
             <div className="modal-actions">
-            <button type="button" onClick={() => setShowCreateModal(false)}>Cancel</button>
-            <button type="submit" className="btn-primary">Create Template</button>
+            <button type="button" onClick={() => setShowCreateModal(false)}>
+            Cancel
+            </button>
+            <button type="submit" className="btn-primary" disabled={loadingOptions}>
+            {loadingOptions ? 'Loading...' : 'Create Template'}
+            </button>
             </div>
             </form>
             </div>
             </div>
         )}
-
         {/* Detail Modal */}
         {showModal && selectedTemplate && (
             <div className="modal-overlay" onClick={() => setShowModal(false)}>
@@ -271,6 +422,33 @@ const TemplatesPage = () => {
                 --badge-txt: #bfdbfe;
             }
 
+            .combo-input {
+                position: relative;
+            }
+
+            .combo-input input {
+                width: 100%;
+                padding: 8px;
+                border: 1px solid var(--border);
+                border-radius: 4px;
+                background: var(--input-bg);
+                color: var(--text-main);
+            }
+
+            .combo-input input:focus {
+                outline: none;
+                border-color: #007bff;
+                box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+            }
+
+            textarea {
+                font-family: inherit;
+            }
+
+            small {
+                display: block;
+                margin-top: 0.25rem;
+            }
             .page-container { padding: 2rem; font-family: 'Inter', sans-serif; background: var(--bg-main); min-height: 100vh; color: var(--text-main); }
 
             .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
