@@ -70,22 +70,22 @@ function RequesterPage() {
         action: rule.action,
         _templateName: template.template_name,
         _originalSytemType: rule.system_type
-    }));
-    setRequests(newRequests);
-    setShowTemplates(false);
-    setSubmitSuccess(
-      `Template "${template.template_name}" loaded!` +
-      `SystemType set to "Template"" for tracking`
-    );
-    setTimeout(() => setSubmitSuccess(''), 3000);
+      }));
+      setRequests(newRequests);
+      setShowTemplates(false);
+      setSubmitSuccess(
+        `Template "${template.template_name}" loaded!` +
+        `SystemType set to "Template"" for tracking`
+      );
+      setTimeout(() => setSubmitSuccess(''), 3000);
+    }
   };
-}
 
-// Fetch templates when modal opens
-useEffect(() => {
-  if (showTemplates) {
-    fetchTemplates();
-  }
+  // Fetch templates when modal opens
+  useEffect(() => {
+    if (showTemplates) {
+      fetchTemplates();
+    }
   }, [showTemplates]);
 
   // Fetch help content when modal opens
@@ -174,7 +174,7 @@ useEffect(() => {
         const contentDisposition = response.headers.get('content-disposition');
         const filenameMatch = contentDisposition?.match(/filename="(.+)"/);
         const filename = filenameMatch ? filenameMatch[1] :
-        `acl_submission_${submittedRequests.length}requests_${new Date().toISOString().split('T')[0]}.xlsx`;
+          `acl_submission_${submittedRequests.length}requests_${new Date().toISOString().split('T')[0]}.xlsx`;
 
         a.download = filename;
         document.body.appendChild(a);
@@ -340,7 +340,7 @@ useEffect(() => {
     return enhancedIPs;
   };
 
-  // Get filtered Destination IP options based on system_type and category - IMPROVED
+  // Get filtered Destination IP options based on system_type and category 
   const getFilteredDestinationIPs = (index) => {
     const request = requests[index];
     const system_type = request.system_type;
@@ -410,7 +410,7 @@ useEffect(() => {
   const updateRequest = (index, field, value) => {
     const newRequests = [...requests];
     const newAutoPopulatedFields = [...autoPopulatedFields];
-    const oldValue = newRequests[index][field ]
+    const oldValue = newRequests[index][field]
 
     newRequests[index][field] = value;
 
@@ -562,7 +562,7 @@ useEffect(() => {
     setAutoPopulatedFields(newAutoPopulatedFields);
   };
 
-  // MODIFIED: Add request with validation state
+  // Add request with validation state
   const addRequest = () => {
     setRequests([...requests, { ...initialRequest }]);
     setAutoPopulatedFields([...autoPopulatedFields, {
@@ -576,13 +576,6 @@ useEffect(() => {
     // Add empty validation error object for new row
     setValidationErrors([...validationErrors, {}]);
     setTouchedFields([...touchedFields, {}]);
-  };
-  const isTemplateCategory = (index) => {
-    /**
-     * Checks if current system_type is "Template"
-     * Template entries can have pre-filled values but are still validated
-     */
-    return requests[index].system_type === "Template";
   };
   // Remove request with validation state
   const removeRequest = (index) => {
@@ -665,50 +658,53 @@ useEffect(() => {
 
 
   // Handle bulk submit with validation
-  const handleBulkSubmit = async (e) => {
-    e.preventDefault();
-    setSubmitError("");
-    setSubmitSuccess("");
-    setValidationProgress('Starting validation...');
+const handleBulkSubmit = async (e) => {
+  e.preventDefault();
+  setSubmitError("");
+  setSubmitSuccess("");
+  setValidationProgress('Starting validation...');
 
-    // Basic field checks
-    try {
-      for (let i = 0; i < requests.length; i++) {
-        const req = requests[i];
+  // Basic field checks
+  try {
+    for (let i = 0; i < requests.length; i++) {
+      const req = requests[i];
 
-        if (!req.system_type) {
-          throw new Error(`Please select System Type in Request #${i + 1}`);
+      if (!req.system_type) {
+        throw new Error(`Please select System Type in Request #${i + 1}`);
+      }
+
+      if (req.system_type === "Others") {
+        if (!req.sourceIP || !req.destinationIP || !req.service) {
+          throw new Error(`Please fill Source IP, Destination IP, and Service for "Others" system type in Request #${i + 1}`);
         }
-
-        if (req.system_type === "Others") {
-          if (!req.sourceIP || !req.destinationIP || !req.service) {
-            throw new Error(`Please fill Source IP, Destination IP, and Service for "Others" system type in Request #${i + 1}`);
-          }
-        } else {
-          if (!req.category || !req.sourceIP || !req.destinationIP || !req.service) {
-            throw new Error(`Please fill all required fields in Request #${i + 1}`);
-          }
-        }
-
-        if (!req.action) {
-          throw new Error(`Please select Action in Request #${i + 1}`);
+      } else {
+        if (!req.category || !req.sourceIP || !req.destinationIP || !req.service) {
+          throw new Error(`Please fill all required fields in Request #${i + 1}`);
         }
       }
 
-      // Perform backend validation with visible progress
-      const isValid = await validateRequestsBackend();
-
-      if (!isValid) {
-        setSubmitError('❌ Validation failed. Please fix the errors highlighted below');
-        return;
+      if (!req.action) {
+        throw new Error(`Please select Action in Request #${i + 1}`);
       }
+    }
 
-      // Validation passed - proceed with submission
-      setLoading(true);
-      setValidationProgress('Submitting requests...');
+    // Perform backend validation with visible progress
+    const isValid = await validateRequestsBackend();
 
-      const token = localStorage.getItem('token');
-      const submissionPromises = requests.map((request) =>
+    if (!isValid) {
+      setSubmitError('❌ Validation failed. Please fix the errors highlighted below');
+      return;
+    }
+
+    // Validation passed - proceed with submission
+    setLoading(true);
+    setValidationProgress('Submitting requests...');
+
+    const token = localStorage.getItem('token');
+    const submittedRequests = [];
+
+    // Submit all requests and collect their responses and parsed JSON
+    const submissionPromises = requests.map((request) =>
       fetch(`${API_BASE_URL}/create_acl_request`, {
         method: "POST",
         headers: {
@@ -726,22 +722,19 @@ useEffect(() => {
           description: request.description || "ACL Request",
           action: request.action,
         }),
-      })
-      );
-
-      const responses = await Promise.all(submissionPromises);
-      const submitedRequests = []
-
-      for (let i = 0; i < responses.length; i++) {
-        const response = responses[i];
-
+      }).then(async (response) => {
+        const data = await response.json().catch(() => ({}));
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error || `Request #${i + 1} failed`);
+          throw new Error(data.error || 'Unknown error from server');
         }
-      }
+        return data;
+      })
+    );
 
-      const responseData = await response.json();
+    const results = await Promise.all(submissionPromises);
+
+    // Build submittedRequests array using returned data and original request info
+    results.forEach((responseData, i) => {
       submittedRequests.push({
         id: responseData.request_id || 'N/A',
         requester: localStorage.getItem('username') || 'User',
@@ -756,576 +749,579 @@ useEffect(() => {
         action: requests[i].action,
         status: 'Pending'
       });
-    }
-      // Success!
-      setRequests([{ ...initialRequest }]);
-      setAutoPopulatedFields([{
-        sourceIP: false,
-        sourceHost: false,
-        destinationIP: false,
-        destinationHost: false,
-        service: false,
-        description: false
-      }]);
-      setValidationErrors([{}]);
-      setTouchedFields([{}]);
-      setValidationProgress('');
+    });
 
-      setSubmitSuccess(`✅ Successfully submitted ${requests.length} ACL request(s)! Validation complete. You can download an Excel report below.`);
-      await handleDownloadSubmissionExcel(submittedRequests);
+    // Success!
+    setRequests([{ ...initialRequest }]);
+    setAutoPopulatedFields([{
+      sourceIP: false,
+      sourceHost: false,
+      destinationIP: false,
+      destinationHost: false,
+      service: false,
+      description: false
+    }]);
+    setValidationErrors([{}]);
+    setTouchedFields([{}]);
+    setValidationProgress('');
 
-      setTimeout(() => setSubmitSuccess(""), 8000);
+    setSubmitSuccess(`✅ Successfully submitted ${requests.length} ACL request(s)! Validation complete. You can download an Excel report below.`);
 
-    } catch (err) {
-      setValidationProgress('');
-      setSubmitError(`Failed to submit requests: ${err.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
+    await handleDownloadSubmissionExcel(submittedRequests);
 
-  if (loading && requests.length === 1 && !requests[0].system_type) {
-    return <div className="loading">Loading form options...</div>;
+    setTimeout(() => setSubmitSuccess(""), 8000);
+
+  } catch (err) {
+    setValidationProgress('');
+    setSubmitError(`Failed to submit requests: ${err.message}`);
+  } finally {
+    setLoading(false);
   }
+};
 
-  return (
-    <div className="acl-table-container">
-      <div className="acl-table-header">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-          <div>
-            <h1>📋 ACL Request Automation</h1>
-            <p>Create multiple ACL requests in a table format</p>
-          </div>
-          <nav style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-            <button
-              type="button"
-              onClick={() => setShowHelp(true)}
-              style={{
-                backgroundColor: '#17a2b8',
-                color: 'white',
-                border: 'none',
-                padding: '8px 16px',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: '500',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '5px'
-              }}
-              title="Help & Instructions"
-            >
-              ❓ Help
-            </button>
-            <LogoutButton />
-          </nav>
+
+if (loading && requests.length === 1 && !requests[0].system_type) {
+  return <div className="loading">Loading form options...</div>;
+}
+
+return (
+  <div className="acl-table-container">
+    <div className="acl-table-header">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+        <div>
+          <h1>📋 ACL Request Automation</h1>
+          <p>Create multiple ACL requests in a table format</p>
+        </div>
+        <nav style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <button
+            type="button"
+            onClick={() => setShowHelp(true)}
+            style={{
+              backgroundColor: '#17a2b8',
+              color: 'white',
+              border: 'none',
+              padding: '8px 16px',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: '500',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px'
+            }}
+            title="Help & Instructions"
+          >
+            ❓ Help
+          </button>
+          <LogoutButton />
+        </nav>
+      </div>
+    </div>
+
+    {submitSuccess && (
+      <div className="success-message">
+        {submitSuccess}
+      </div>
+    )}
+
+    {submitError && (
+      <div className="error-message">
+        {submitError}
+      </div>
+    )}
+
+    {error && (
+      <div className={error.includes('✅') ? 'success-message' : 'error-message'}>
+        {error}
+      </div>
+    )}
+
+    {validationProgress && (
+      <div className="validation-progress-container">
+        <div className="validation-progress">
+          <div className="spinner"></div>
+          <span>{validationProgress}</span>
         </div>
       </div>
+    )}
 
-      {submitSuccess && (
-        <div className="success-message">
-          {submitSuccess}
-        </div>
-      )}
-
-      {submitError && (
-        <div className="error-message">
-          {submitError}
-        </div>
-      )}
-
-      {error && (
-        <div className={error.includes('✅') ? 'success-message' : 'error-message'}>
-          {error}
-        </div>
-      )}
-
-      {validationProgress && (
-        <div className="validation-progress-container">
-        <div className="validation-progress">
-        <div className="spinner"></div>
-        <span>{validationProgress}</span>
-        </div>
-        </div>
-      )}
-
-      <form onSubmit={handleBulkSubmit}>
-        <div className="acl-table-wrapper">
-          <table className="acl-table">
-            <thead>
-              <tr>
-                <th className="required-field">System Type</th>
-                <th className="required-field">Category</th>
-                <th className="required-field">Source IP</th>
-                <th>Source Host</th>
-                <th className="required-field">Destination IP</th>
-                <th>Destination Host</th>
-                <th className="required-field">Service</th>
-                <th style={{minWidth: '200px'}} >Description</th>
-                <th className="required-field" style={{minWidth: '120px'}}>Action</th>
-                <th>Remove</th>
-              </tr>
-            </thead>
-            <tbody>
+    <form onSubmit={handleBulkSubmit}>
+      <div className="acl-table-wrapper">
+        <table className="acl-table">
+          <thead>
+            <tr>
+              <th className="required-field">System Type</th>
+              <th className="required-field">Category</th>
+              <th className="required-field">Source IP</th>
+              <th>Source Host</th>
+              <th className="required-field">Destination IP</th>
+              <th>Destination Host</th>
+              <th className="required-field">Service</th>
+              <th style={{ minWidth: '200px' }} >Description</th>
+              <th className="required-field" style={{ minWidth: '120px' }}>Action</th>
+              <th>Remove</th>
+            </tr>
+          </thead>
+          <tbody>
             {requests.map((request, index) => {
               const rowErrors = validationErrors[index] || {};
               const hasErrors = Object.keys(rowErrors).length > 0;
 
               return (
                 <tr key={index} className={hasErrors ? 'error-row' : ''}>
-                <td>
-                {request.system_type}
-                {isTemplateCategory(index) && (
-                  <span
-                  style={{
-                    marginLeft: '8px',
-                    padding: '2px 8px',
-                    backgroundColor: '#E2EFDA',
-                    color: '#2F5233',
-                    borderRadius: '12px',
-                    fontSize: '0.75rem',
-                    fontWeight: 'bold'
-                  }}
-                  title={`From template: ${request._templateName || 'Unknown'}`}
-                  >
-                  📋 Template
-                  </span>
-                )}
-                {isOthersCategory(index) && (
-                  <span
-                  style={{
-                    marginLeft: '8px',
-                    padding: '2px 8px',
-                    backgroundColor: '#FFE699',
-                    color: '#856404',
-                    borderRadius: '12px',
-                    fontSize: '0.75rem',
-                    fontWeight: 'bold'
-                  }}
-                  >
-                  ✏️ Manual
-                  </span>
-                )}
-                </td>
+                  <td>
+                    {request.system_type}
+                    {isTemplateCategory(index) && (
+                      <span
+                        style={{
+                          marginLeft: '8px',
+                          padding: '2px 8px',
+                          backgroundColor: '#E2EFDA',
+                          color: '#2F5233',
+                          borderRadius: '12px',
+                          fontSize: '0.75rem',
+                          fontWeight: 'bold'
+                        }}
+                        title={`From template: ${request._templateName || 'Unknown'}`}
+                      >
+                        📋 Template
+                      </span>
+                    )}
+                    {isOthersCategory(index) && (
+                      <span
+                        style={{
+                          marginLeft: '8px',
+                          padding: '2px 8px',
+                          backgroundColor: '#FFE699',
+                          color: '#856404',
+                          borderRadius: '12px',
+                          fontSize: '0.75rem',
+                          fontWeight: 'bold'
+                        }}
+                      >
+                        ✏️ Manual
+                      </span>
+                    )}
+                  </td>
 
-                <td>
-                {isOthersCategory(index) || isTemplateCategory(index) ? (
-                  <input
-                  type="text"
-                  value={request.category}
-                  onChange={(e) => updateRequest(index, 'category', e.target.value)}
-                  placeholder={isTemplateCategory(index) ? "From template" : "Enter category"}
-                  disabled={isTemplateCategory(index)}  // Disable for template (pre-filled)
-                style={{
-                  backgroundColor: isTemplateCategory(index) ? '#E2EFDA' : 'white',fontWeight: isTemplateCategory(index) ? 'bold' : 'normal'
-                }}
-                />
-                ) : (
-                  <select
-                  value={request.category}
-                  onChange={(e) => updateRequest(index, 'category', e.target.value)}
-                  disabled={!request.system_type}
-                  required
-                  >
-                  <option value="">Select Category</option>
-                  {getFilteredCategories(index).map((cat, idx) => (
-                    <option key={idx} value={cat.value}>{cat.display}</option>
-                  ))}
-                  </select>
-                )}
-                {rowErrors.category && (
-                  <div className="field-error">{rowErrors.category}</div>
-                )}
-                </td>
+                  <td>
+                    {isOthersCategory(index) || isTemplateCategory(index) ? (
+                      <input
+                        type="text"
+                        value={request.category}
+                        onChange={(e) => updateRequest(index, 'category', e.target.value)}
+                        placeholder={isTemplateCategory(index) ? "From template" : "Enter category"}
+                        disabled={isTemplateCategory(index)}  // Disable for template (pre-filled)
+                        style={{
+                          backgroundColor: isTemplateCategory(index) ? '#E2EFDA' : 'white', fontWeight: isTemplateCategory(index) ? 'bold' : 'normal'
+                        }}
+                      />
+                    ) : (
+                      <select
+                        value={request.category}
+                        onChange={(e) => updateRequest(index, 'category', e.target.value)}
+                        disabled={!request.system_type}
+                        required
+                      >
+                        <option value="">Select Category</option>
+                        {getFilteredCategories(index).map((cat, idx) => (
+                          <option key={idx} value={cat.value}>{cat.display}</option>
+                        ))}
+                      </select>
+                    )}
+                    {rowErrors.category && (
+                      <div className="field-error">{rowErrors.category}</div>
+                    )}
+                  </td>
 
-                <td>
-                <select
-                value={request.system_type}
-                onChange={(e) => updateRequest(index, 'system_type', e.target.value)}
-                required
-                >
-                <option value="">Select System Type</option>
-                {options.system_types.map((st, idx) => (
-                  <option key={idx} value={st}>{st}</option>
-                ))}
-                </select>
-                {rowErrors.system_type && (
-                  <div className="field-error">{rowErrors.system_type}</div>
-                )}
-                </td>
+                  <td>
+                    <select
+                      value={request.system_type}
+                      onChange={(e) => updateRequest(index, 'system_type', e.target.value)}
+                      required
+                    >
+                      <option value="">Select System Type</option>
+                      {options.system_types.map((st, idx) => (
+                        <option key={idx} value={st}>{st}</option>
+                      ))}
+                    </select>
+                    {rowErrors.system_type && (
+                      <div className="field-error">{rowErrors.system_type}</div>
+                    )}
+                  </td>
 
-                <td>
-                {request.system_type === "Others" ? (
-                  <input
-                  type="text"
-                  value={request.category}
-                  onChange={(e) => updateRequest(index, 'category', e.target.value)}
-                  placeholder="Enter category"
-                  />
-                ) : (
-                  <select
-                  value={request.category}
-                  onChange={(e) => updateRequest(index, 'category', e.target.value)}
-                  disabled={!request.system_type}
-                  required
-                  >
-                  <option value="">Select Category</option>
-                  {getFilteredCategories(index).map((cat, idx) => (
-                    <option key={idx} value={cat.value}>{cat.display}</option>
-                  ))}
-                  </select>
-                )}
-                {rowErrors.category && (
-                  <div className="field-error">{rowErrors.category}</div>
-                )}
-                </td>
+                  <td>
+                    {request.system_type === "Others" ? (
+                      <input
+                        type="text"
+                        value={request.category}
+                        onChange={(e) => updateRequest(index, 'category', e.target.value)}
+                        placeholder="Enter category"
+                      />
+                    ) : (
+                      <select
+                        value={request.category}
+                        onChange={(e) => updateRequest(index, 'category', e.target.value)}
+                        disabled={!request.system_type}
+                        required
+                      >
+                        <option value="">Select Category</option>
+                        {getFilteredCategories(index).map((cat, idx) => (
+                          <option key={idx} value={cat.value}>{cat.display}</option>
+                        ))}
+                      </select>
+                    )}
+                    {rowErrors.category && (
+                      <div className="field-error">{rowErrors.category}</div>
+                    )}
+                  </td>
 
-                <td>
-                <input
-                list={`sourceIP-options-${index}`}
-                value={request.sourceIP}
-                onChange={(e) => updateRequest(index, 'sourceIP', e.target.value)}
-                placeholder="Source IP"
-                className={rowErrors.sourceIP ? 'input-error' : ''}
-                required
-                />
-                <datalist id={`sourceIP-options-${index}`}>
-                {getFilteredSourceIPs(index).map((ip, idx) => (
-                  <option key={idx} value={ip.value} />
-                ))}
-                </datalist>
-                {rowErrors.sourceIP && (
-                  <div className="field-error">{rowErrors.sourceIP}</div>
-                )}
-                </td>
+                  <td>
+                    <input
+                      list={`sourceIP-options-${index}`}
+                      value={request.sourceIP}
+                      onChange={(e) => updateRequest(index, 'sourceIP', e.target.value)}
+                      placeholder="Source IP"
+                      className={rowErrors.sourceIP ? 'input-error' : ''}
+                      required
+                    />
+                    <datalist id={`sourceIP-options-${index}`}>
+                      {getFilteredSourceIPs(index).map((ip, idx) => (
+                        <option key={idx} value={ip.value} />
+                      ))}
+                    </datalist>
+                    {rowErrors.sourceIP && (
+                      <div className="field-error">{rowErrors.sourceIP}</div>
+                    )}
+                  </td>
 
-                <td>
-                <input
-                type="text"
-                value={request.sourceHost}
-                onChange={(e) => updateRequest(index, 'sourceHost', e.target.value)}
-                placeholder="Source Host"
-                />
-                </td>
+                  <td>
+                    <input
+                      type="text"
+                      value={request.sourceHost}
+                      onChange={(e) => updateRequest(index, 'sourceHost', e.target.value)}
+                      placeholder="Source Host"
+                    />
+                  </td>
 
-                <td>
-                <input
-                list={`destinationIP-options-${index}`}
-                value={request.destinationIP}
-                onChange={(e) => updateRequest(index, 'destinationIP', e.target.value)}
-                placeholder="Destination IP"
-                className={rowErrors.destinationIP ? 'input-error' : ''}
-                required
-                />
-                <datalist id={`destinationIP-options-${index}`}>
-                {getFilteredDestinationIPs(index).map((ip, idx) => (
-                  <option key={idx} value={ip.value} />
-                ))}
-                </datalist>
-                {rowErrors.destinationIP && (
-                  <div className="field-error">{rowErrors.destinationIP}</div>
-                )}
-                </td>
+                  <td>
+                    <input
+                      list={`destinationIP-options-${index}`}
+                      value={request.destinationIP}
+                      onChange={(e) => updateRequest(index, 'destinationIP', e.target.value)}
+                      placeholder="Destination IP"
+                      className={rowErrors.destinationIP ? 'input-error' : ''}
+                      required
+                    />
+                    <datalist id={`destinationIP-options-${index}`}>
+                      {getFilteredDestinationIPs(index).map((ip, idx) => (
+                        <option key={idx} value={ip.value} />
+                      ))}
+                    </datalist>
+                    {rowErrors.destinationIP && (
+                      <div className="field-error">{rowErrors.destinationIP}</div>
+                    )}
+                  </td>
 
-                <td>
-                <input
-                type="text"
-                value={request.destinationHost}
-                onChange={(e) => updateRequest(index, 'destinationHost', e.target.value)}
-                placeholder="Destination Host"
-                />
-                </td>
+                  <td>
+                    <input
+                      type="text"
+                      value={request.destinationHost}
+                      onChange={(e) => updateRequest(index, 'destinationHost', e.target.value)}
+                      placeholder="Destination Host"
+                    />
+                  </td>
 
-                <td>
-                <input
-                type="text"
-                value={request.service}
-                onChange={(e) => updateRequest(index, 'service', e.target.value)}
-                placeholder="Service"
-                className={rowErrors.service ? 'input-error' : ''}
-                required
-                />
-                {rowErrors.service && (
-                  <div className="field-error">{rowErrors.service}</div>
-                )}
-                </td>
+                  <td>
+                    <input
+                      type="text"
+                      value={request.service}
+                      onChange={(e) => updateRequest(index, 'service', e.target.value)}
+                      placeholder="Service"
+                      className={rowErrors.service ? 'input-error' : ''}
+                      required
+                    />
+                    {rowErrors.service && (
+                      <div className="field-error">{rowErrors.service}</div>
+                    )}
+                  </td>
 
-                <td>
-                <textarea
-                value={request.description}
-                onChange={(e) => updateRequest(index, 'description', e.target.value)}
-                placeholder="Description"
-                className={rowErrors.description ? 'input-error' : ''}
-                style={{minWidth: '180px', minHeight: '40px'}}
-                />
-                {rowErrors.description && (
-                  <div className="field-error">{rowErrors.description}</div>
-                )}
-                </td>
+                  <td>
+                    <textarea
+                      value={request.description}
+                      onChange={(e) => updateRequest(index, 'description', e.target.value)}
+                      placeholder="Description"
+                      className={rowErrors.description ? 'input-error' : ''}
+                      style={{ minWidth: '180px', minHeight: '40px' }}
+                    />
+                    {rowErrors.description && (
+                      <div className="field-error">{rowErrors.description}</div>
+                    )}
+                  </td>
 
-                <td>
-                <select
-                value={request.action}
-                onChange={(e) => updateRequest(index, 'action', e.target.value)}
-                required
-                style={{minWidth: '100px'}}
-                >
-                <option value="">Select</option>
-                <option value="allow">Allow</option>
-                <option value="deny">Deny</option>
-                </select>
-                {rowErrors.action && (
-                  <div className="field-error">{rowErrors.action}</div>
-                )}
-                </td>
+                  <td>
+                    <select
+                      value={request.action}
+                      onChange={(e) => updateRequest(index, 'action', e.target.value)}
+                      required
+                      style={{ minWidth: '100px' }}
+                    >
+                      <option value="">Select</option>
+                      <option value="allow">Allow</option>
+                      <option value="deny">Deny</option>
+                    </select>
+                    {rowErrors.action && (
+                      <div className="field-error">{rowErrors.action}</div>
+                    )}
+                  </td>
 
-                <td>
-                {requests.length > 1 && (
-                  <button
-                  type="button"
-                  onClick={() => removeRequest(index)}
-                  className="btn-remove-row"
-                  >
-                  🗑️
-                  </button>
-                )}
-                </td>
+                  <td>
+                    {requests.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeRequest(index)}
+                        className="btn-remove-row"
+                      >
+                        🗑️
+                      </button>
+                    )}
+                  </td>
                 </tr>
               );
             })}
-            </tbody>
-          </table>
-        </div>
-        {/* Form Actions */}
-        <div className="acl-form-actions">
-          <button
-            type="button"
-            onClick={addRequest}
-            className="btn-add-request"
-          >
-            <span>+</span> Add Another Request
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowTemplates(true)}
-          >
-            <span>+</span> 📋 Use Template
-          </button>
-
-          <div className="acl-submit-section">
-            <div className="acl-request-count">
-              Total Requests: {requests.length}
-            </div>
-            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-              <button
-                type="button"
-                onClick={handleDownloadExcel}
-                style={{
-                  backgroundColor: '#28a745',
-                  color: 'white',
-                  border: 'none',
-                  padding: '10px 20px',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  fontWeight: '500'
-                }}
-                title="Download Excel report of all requests"
-              >
-                📥 Download Excel
-              </button>
-              <button
-                type="submit"
-                disabled={loading || isValidating}
-                className="btn-submit-requests"
-              >
-                {loading ? "Submitting..." : `Submit ${requests.length} Request(s)`}
-              </button>
-            </div>
-          </div>
-        </div>
-      </form>
-
-      {/* Template Selection Modal */}
-        {showTemplates && (
-        <div className="modal-overlay" onClick={() => setShowTemplates(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>📋 Select Template</h2>
-              <button className="close-btn" onClick={() => setShowTemplates(false)}>×</button>
-            </div>
-            <div className="modal-body">
-              {loadingTemplates ? (
-                <p>Loading templates...</p>
-              ) : templates.length === 0 ? (
-                <p>No templates available</p>
-              ) : (
-                <div className="templates-list">
-                  {templates.map(template => (
-                    <div key={template.template_name} className="template-item">
-                      <h4>{template.template_name}</h4>
-                      <p><strong>Rules:</strong> {template.rule_count}</p>
-                      <div style={{fontSize: '12px', color: '#666', marginBottom: '10px'}}>
-                        {template.rules.map((rule, idx) => (
-                          <div key={idx}>
-                            {idx + 1}. {rule.system_type} - {rule.category} ({rule.service})
-                          </div>
-                        ))}
-                      </div>
-                      <button onClick={() => loadTemplate(template)} className="btn-use-template">
-                        Use Template ({template.rule_count} rules)
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Validation Errors Modal */}
-      {showValidationModal && validationErrors.some(e => Object.keys(e).length > 0) && (
-        <div className="modal-overlay" onClick={() => setShowValidationModal(false)}>
-        <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-        <h2>⚠️ Validation Errors</h2>
-        <button className="close-btn" onClick={() => setShowValidationModal(false)}>×</button>
-        </div>
-        <div className="modal-body">
-        <p>Please fix the following errors before submitting:</p>
-        {validationErrors.map((errors, idx) => {
-          if (Object.keys(errors).length === 0) return null;
-          return (
-            <div key={idx} className="validation-error-item">
-            <h4>Request #{idx + 1}:</h4>
-            <ul>
-            {Object.entries(errors).map(([field, error]) => (
-              <li key={field}><strong>{field}:</strong> {error}</li>
-            ))}
-            </ul>
-            </div>
-          );
-        })}
-        </div>
-        <div className="modal-footer">
-        <button onClick={() => setShowValidationModal(false)} className="btn-secondary">
-        Close and Fix Errors
+          </tbody>
+        </table>
+      </div>
+      {/* Form Actions */}
+      <div className="acl-form-actions">
+        <button
+          type="button"
+          onClick={addRequest}
+          className="btn-add-request"
+        >
+          <span>+</span> Add Another Request
         </button>
-        </div>
-        </div>
-        </div>
-      )}
+        <button
+          type="button"
+          onClick={() => setShowTemplates(true)}
+        >
+          <span>+</span> 📋 Use Template
+        </button>
 
-      {/* Help Modal */}
-      {showHelp && (
-        <div className="modal-overlay" onClick={() => setShowHelp(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '800px', maxHeight: '90vh', overflowY: 'auto' }}>
-            <div className="modal-header">
-              <h2>❓ Help & Instructions</h2>
-              <button className="close-btn" onClick={() => setShowHelp(false)}>×</button>
-            </div>
-            <div className="modal-body">
-              {loadingHelp ? (
-                <p>Loading help information...</p>
-              ) : helpContent ? (
-                <div style={{ padding: '20px' }}>
-                  <section style={{ marginBottom: '30px' }}>
-                    <h3>📖 Overview</h3>
-                    <p>{helpContent.overview}</p>
-                  </section>
-
-                  <section style={{ marginBottom: '30px' }}>
-                    <h3>📝 How to Create a Request</h3>
-                    <ol style={{ paddingLeft: '20px' }}>
-                      {helpContent.how_to_create_request?.steps?.map((step, idx) => (
-                        <li key={idx} style={{ marginBottom: '8px' }}>{step}</li>
-                      ))}
-                    </ol>
-                    <div style={{ marginTop: '15px', padding: '10px', backgroundColor: '#e7f3ff', borderRadius: '4px' }}>
-                      <strong>💡 Tips:</strong>
-                      <ul style={{ marginTop: '8px', paddingLeft: '20px' }}>
-                        {helpContent.how_to_create_request?.tips?.map((tip, idx) => (
-                          <li key={idx} style={{ marginBottom: '5px' }}>{tip}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  </section>
-
-                  <section style={{ marginBottom: '30px' }}>
-                    <h3>✅ Validation Rules</h3>
-                    <div style={{ padding: '10px', backgroundColor: '#fff3cd', borderRadius: '4px' }}>
-                      <p><strong>IP Addresses:</strong> {helpContent.validation_rules?.ip_addresses}</p>
-                      <p><strong>Services:</strong> {helpContent.validation_rules?.services}</p>
-                      <p><strong>Description:</strong> {helpContent.validation_rules?.description}</p>
-                    </div>
-                  </section>
-
-                  <section style={{ marginBottom: '30px' }}>
-                    <h3>📋 Templates</h3>
-                    <p><strong>Info:</strong> {helpContent.templates?.info}</p>
-                    <p><strong>Usage:</strong> {helpContent.templates?.usage}</p>
-                  </section>
-
-                  <section style={{ marginBottom: '30px' }}>
-                    <h3>📊 Request Status</h3>
-                    <ul style={{ paddingLeft: '20px' }}>
-                      <li><strong>Pending:</strong> {helpContent.request_status?.pending}</li>
-                      <li><strong>Approved:</strong> {helpContent.request_status?.approved}</li>
-                      <li><strong>Rejected:</strong> {helpContent.request_status?.rejected}</li>
-                    </ul>
-                  </section>
-
-                  <section style={{ marginBottom: '30px' }}>
-                    <h3>👥 Role Permissions</h3>
-                    <ul style={{ paddingLeft: '20px' }}>
-                      <li><strong>User:</strong> {helpContent.role_permissions?.user}</li>
-                      <li><strong>Reviewer:</strong> {helpContent.role_permissions?.reviewer}</li>
-                      <li><strong>Admin:</strong> {helpContent.role_permissions?.admin}</li>
-                    </ul>
-                  </section>
-
-                  <section style={{ marginBottom: '30px' }}>
-                    <h3>📦 Bulk Operations</h3>
-                    <p>{helpContent.bulk_operations}</p>
-                  </section>
-
-                  <section style={{ marginBottom: '30px' }}>
-                    <h3>📥 Export</h3>
-                    <p>{helpContent.export}</p>
-                  </section>
-
-                  <section>
-                    <h3>📧 Contact Support</h3>
-                    <p><strong>Email:</strong> {helpContent.contact_support?.email}</p>
-                    <p><em>{helpContent.contact_support?.note}</em></p>
-                  </section>
-                </div>
-              ) : (
-                <p>Failed to load help information</p>
-              )}
-            </div>
-            <div className="modal-footer" style={{ padding: '15px', borderTop: '1px solid #ddd', textAlign: 'right' }}>
-              <button
-                onClick={() => setShowHelp(false)}
-                style={{
-                  backgroundColor: '#6c757d',
-                  color: 'white',
-                  border: 'none',
-                  padding: '8px 16px',
-                  borderRadius: '4px',
-                  cursor: 'pointer'
-                }}
-              >
-                Close
-              </button>
-            </div>
+        <div className="acl-submit-section">
+          <div className="acl-request-count">
+            Total Requests: {requests.length}
+          </div>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <button
+              type="button"
+              onClick={handleDownloadExcel}
+              style={{
+                backgroundColor: '#28a745',
+                color: 'white',
+                border: 'none',
+                padding: '10px 20px',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: '500'
+              }}
+              title="Download Excel report of all requests"
+            >
+              📥 Download Excel
+            </button>
+            <button
+              type="submit"
+              disabled={loading || isValidating}
+              className="btn-submit-requests"
+            >
+              {loading ? "Submitting..." : `Submit ${requests.length} Request(s)`}
+            </button>
           </div>
         </div>
-      )}
+      </div>
+    </form>
 
-      {/* Add CSS for validation styling */}
-      <style jsx="true">{`
+    {/* Template Selection Modal */}
+    {showTemplates && (
+      <div className="modal-overlay" onClick={() => setShowTemplates(false)}>
+        <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-header">
+            <h2>📋 Select Template</h2>
+            <button className="close-btn" onClick={() => setShowTemplates(false)}>×</button>
+          </div>
+          <div className="modal-body">
+            {loadingTemplates ? (
+              <p>Loading templates...</p>
+            ) : templates.length === 0 ? (
+              <p>No templates available</p>
+            ) : (
+              <div className="templates-list">
+                {templates.map(template => (
+                  <div key={template.template_name} className="template-item">
+                    <h4>{template.template_name}</h4>
+                    <p><strong>Rules:</strong> {template.rule_count}</p>
+                    <div style={{ fontSize: '12px', color: '#666', marginBottom: '10px' }}>
+                      {template.rules.map((rule, idx) => (
+                        <div key={idx}>
+                          {idx + 1}. {rule.system_type} - {rule.category} ({rule.service})
+                        </div>
+                      ))}
+                    </div>
+                    <button onClick={() => loadTemplate(template)} className="btn-use-template">
+                      Use Template ({template.rule_count} rules)
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Validation Errors Modal */}
+    {showValidationModal && validationErrors.some(e => Object.keys(e).length > 0) && (
+      <div className="modal-overlay" onClick={() => setShowValidationModal(false)}>
+        <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-header">
+            <h2>⚠️ Validation Errors</h2>
+            <button className="close-btn" onClick={() => setShowValidationModal(false)}>×</button>
+          </div>
+          <div className="modal-body">
+            <p>Please fix the following errors before submitting:</p>
+            {validationErrors.map((errors, idx) => {
+              if (Object.keys(errors).length === 0) return null;
+              return (
+                <div key={idx} className="validation-error-item">
+                  <h4>Request #{idx + 1}:</h4>
+                  <ul>
+                    {Object.entries(errors).map(([field, error]) => (
+                      <li key={field}><strong>{field}:</strong> {error}</li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
+          <div className="modal-footer">
+            <button onClick={() => setShowValidationModal(false)} className="btn-secondary">
+              Close and Fix Errors
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Help Modal */}
+    {showHelp && (
+      <div className="modal-overlay" onClick={() => setShowHelp(false)}>
+        <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '800px', maxHeight: '90vh', overflowY: 'auto' }}>
+          <div className="modal-header">
+            <h2>❓ Help & Instructions</h2>
+            <button className="close-btn" onClick={() => setShowHelp(false)}>×</button>
+          </div>
+          <div className="modal-body">
+            {loadingHelp ? (
+              <p>Loading help information...</p>
+            ) : helpContent ? (
+              <div style={{ padding: '20px' }}>
+                <section style={{ marginBottom: '30px' }}>
+                  <h3>📖 Overview</h3>
+                  <p>{helpContent.overview}</p>
+                </section>
+
+                <section style={{ marginBottom: '30px' }}>
+                  <h3>📝 How to Create a Request</h3>
+                  <ol style={{ paddingLeft: '20px' }}>
+                    {helpContent.how_to_create_request?.steps?.map((step, idx) => (
+                      <li key={idx} style={{ marginBottom: '8px' }}>{step}</li>
+                    ))}
+                  </ol>
+                  <div style={{ marginTop: '15px', padding: '10px', backgroundColor: '#e7f3ff', borderRadius: '4px' }}>
+                    <strong>💡 Tips:</strong>
+                    <ul style={{ marginTop: '8px', paddingLeft: '20px' }}>
+                      {helpContent.how_to_create_request?.tips?.map((tip, idx) => (
+                        <li key={idx} style={{ marginBottom: '5px' }}>{tip}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </section>
+
+                <section style={{ marginBottom: '30px' }}>
+                  <h3>✅ Validation Rules</h3>
+                  <div style={{ padding: '10px', backgroundColor: '#fff3cd', borderRadius: '4px' }}>
+                    <p><strong>IP Addresses:</strong> {helpContent.validation_rules?.ip_addresses}</p>
+                    <p><strong>Services:</strong> {helpContent.validation_rules?.services}</p>
+                    <p><strong>Description:</strong> {helpContent.validation_rules?.description}</p>
+                  </div>
+                </section>
+
+                <section style={{ marginBottom: '30px' }}>
+                  <h3>📋 Templates</h3>
+                  <p><strong>Info:</strong> {helpContent.templates?.info}</p>
+                  <p><strong>Usage:</strong> {helpContent.templates?.usage}</p>
+                </section>
+
+                <section style={{ marginBottom: '30px' }}>
+                  <h3>📊 Request Status</h3>
+                  <ul style={{ paddingLeft: '20px' }}>
+                    <li><strong>Pending:</strong> {helpContent.request_status?.pending}</li>
+                    <li><strong>Approved:</strong> {helpContent.request_status?.approved}</li>
+                    <li><strong>Rejected:</strong> {helpContent.request_status?.rejected}</li>
+                  </ul>
+                </section>
+
+                <section style={{ marginBottom: '30px' }}>
+                  <h3>👥 Role Permissions</h3>
+                  <ul style={{ paddingLeft: '20px' }}>
+                    <li><strong>User:</strong> {helpContent.role_permissions?.user}</li>
+                    <li><strong>Reviewer:</strong> {helpContent.role_permissions?.reviewer}</li>
+                    <li><strong>Admin:</strong> {helpContent.role_permissions?.admin}</li>
+                  </ul>
+                </section>
+
+                <section style={{ marginBottom: '30px' }}>
+                  <h3>📦 Bulk Operations</h3>
+                  <p>{helpContent.bulk_operations}</p>
+                </section>
+
+                <section style={{ marginBottom: '30px' }}>
+                  <h3>📥 Export</h3>
+                  <p>{helpContent.export}</p>
+                </section>
+
+                <section>
+                  <h3>📧 Contact Support</h3>
+                  <p><strong>Email:</strong> {helpContent.contact_support?.email}</p>
+                  <p><em>{helpContent.contact_support?.note}</em></p>
+                </section>
+              </div>
+            ) : (
+              <p>Failed to load help information</p>
+            )}
+          </div>
+          <div className="modal-footer" style={{ padding: '15px', borderTop: '1px solid #ddd', textAlign: 'right' }}>
+            <button
+              onClick={() => setShowHelp(false)}
+              style={{
+                backgroundColor: '#6c757d',
+                color: 'white',
+                border: 'none',
+                padding: '8px 16px',
+                borderRadius: '4px',
+                cursor: 'pointer'
+              }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Add CSS for validation styling */}
+    <style jsx="true">{`
     .input-error {
       border: 2px solid #dc3545 !important;
       background-color: #fff5f5 !important;
@@ -1566,7 +1562,7 @@ useEffect(() => {
   75% { transform: translateX(5px); }
 }
   `}</style>
-    </div>
-  )
+  </div>
+);
 }
 export default RequesterPage;

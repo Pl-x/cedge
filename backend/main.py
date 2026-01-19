@@ -562,29 +562,29 @@ def validate_ip(value: str) -> Tuple[bool, str]:
     """ip valiadtion with octet range checking"""
     if not value:
         return False, "Ip adress cannot be empty"
-    
-    ip_list = [x.strip() for x in str(value).split(',') ]
+
+    ip_list = [x.strip() for x in str(value).split(',')]
 
     for single_ip in ip_list:
         if not single_ip:
             continue
-        
-        single_ip_tolower = single_ip.lower()    
+
+        single_ip_tolower = single_ip.lower()
         special_values = ['any', 'all', 'subnet', '0.0.0.0']
-    
+
         if single_ip_tolower in special_values:
             continue
-    
+
         cidr_pattern = r'(^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/(\d{1,2})$'
         cidr_match = re.match(cidr_pattern, single_ip)
-    
+
         if cidr_match:
             ip_part = cidr_match.group(1)
             cidr_prefix = int(cidr_match.group(2))
-        
+
             if not (0 <= cidr_prefix <= 32):
                 return False, f"Invalid CIDR prefix: {single_ip}, Must be 0-32"
-        
+
             is_valid, error = validate_ipv4_octets(ip_part)
             if not is_valid:
                 return False, error
@@ -594,7 +594,7 @@ def validate_ip(value: str) -> Tuple[bool, str]:
 
         if not ip_match:
             return False, f"Invalid IP format: '{single_ip}'. Expected format: x.x.x.x"
-        
+
         is_valid, error = validate_ipv4_octets(single_ip)
         if not is_valid:
             return False, error
@@ -629,9 +629,9 @@ def validate_service(value: str) -> Tuple[bool, str]:
     '''Validate service port specification'''
     if not value:
         return False, "Service cannot be empty"
-    
-    service_list = [x.strip() for x in str(value).split(',') ]
-    
+
+    service_list = [x.strip() for x in str(value).split(',')]
+
     known_services = [
         'http', 'https', 'ssh', 'ftp', 'ftps', 'sftp',
         'smtp', 'smtps', 'pop3', 'pop3s', 'imap', 'imaps',
@@ -640,15 +640,15 @@ def validate_service(value: str) -> Tuple[bool, str]:
         'mysql', 'postgres', 'mongodb', 'redis',
         'kerberos', 'ntp', 'syslog', 'rsync'
     ]
-    
+
     for item in service_list:
         if not item:
             continue
-        
+
         item_tolower = item.lower()
         if item_tolower in known_services:
             continue
-        
+
         if item_tolower in ['icmp', 'ip', 'gre', 'esp', 'ah']:
             continue
 
@@ -669,10 +669,10 @@ def validate_service(value: str) -> Tuple[bool, str]:
             if not (1 <= port <= 65535):
                 return False, f"Port {port} out of range. Must be between 1-65535"
             continue
-            
+
         range_pattern = r'^(\d+)-(\d+)$'
         range_match = re.match(range_pattern, item)
-        
+
         if range_match:
             start_port = int(range_match.group(1))
             end_port = int(range_match.group(2))
@@ -685,9 +685,9 @@ def validate_service(value: str) -> Tuple[bool, str]:
             if start_port == end_port:
                 return False, f"Use single port {start_port} instead of range {start_port}-{end_port}"
             continue
-            
+
         return False, f"Invalid service format: '{item}'. Use port (80), range (80-90), procol/port (tcp/80) or service name (http)"
-    
+
     return True, ""
 
 
@@ -695,16 +695,16 @@ def validate_description(value: str) -> Tuple[bool, str]:
     '''valiadte description field'''
     if not value:
         return False, "Description cannot be empty"
-    
+
     value = str(value).strip()
-    
+
     # length check
     if len(value) < 1:
         return False, f"Description too short ({len(value)} chars). Minimum 1 characters"
-    
+
     if len(value) > 500:
         return False, f"Description too long ({len(value)} chars). Maximum 500 chars"
-    
+
     forbidden_chars = ['<', '>', '|', '\x00', '\r']
     for char in forbidden_chars:
         if char in value:
@@ -717,66 +717,65 @@ def validate_description(value: str) -> Tuple[bool, str]:
         r"(<script)",
         r"(javascript)"
     ]
-    
+
     for pattern in suspicious_patterns:
         if re.search(pattern, value, re.IGNORECASE):
             return False, "Description contains suspicious content"
-    
+
     return True, ""
 
 
 def validate_request_payload(data: dict) -> List[str]:
     '''validate the entire acl_request payload'''
     errors = []
-    
+
     required_fields = ['sourceIP', 'destinationIP', 'service', 'description']
 
     system_type = data.get('system_type', '')
 
-    
     for field in required_fields:
         if field not in data or not data[field]:
             if system_type == 'Template' and field == 'description':
                 continue
             errors.append(f"missing required field {field}")
-            
+
     # if missing required fields return early
     if errors:
         return errors
-    
+
     # validate sourceIP
     is_valid, error = validate_ip(data['sourceIP'])
     if not is_valid:
         errors.append(f"sourceIP . {error}")
-        
+
     # validate destinationIP
     is_valid, error = validate_ip(data['destinationIP'])
     if not is_valid:
         errors.append(f"destinationIP . {error}")
-        
+
     # valiadte service
     is_valid, error = validate_service(data['service'])
     if not is_valid:
         errors.append(f"service . {error}")
-        
+
     # validate description
     is_valid, error = validate_description(data['description'])
     if not is_valid:
         errors.append(f"description . {error}")
-        
+
     return errors
 
 
 def validate_bulk_requests(requests: List[dict]) -> Dict[int, List[str]]:
     '''validate multiple acl requests'''
     all_errors = {}
-    
+
     for index, request_data in enumerate(requests):
         errors = validate_request_payload(request_data)
-        
+
         if errors:
             all_errors[index] = errors
-            
+
     return all_errors
 
 
@@ -915,11 +914,12 @@ def token_required(required_role=None):
                 return jsonify({'error': 'Authentication token missing'}), 401
 
             try:
-                data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+                data = jwt.decode(
+                    token, app.config['SECRET_KEY'], algorithms=['HS256'])
                 current_user = User.query.get(data['user_id'])
 
                 if not current_user:
-                    return jsonify({'error' : 'User not found'})
+                    return jsonify({'error': 'User not found'})
                 if required_role is not None:
                     if current_user.role != required_role:
                         return jsonify({'error': 'Unauthorized: You lack the neccesary role to access this page'}), 403
@@ -999,21 +999,20 @@ def get_form_options():
 def get_mysql_options():
     """Get options directly from MySQL database"""
     try:
-
         with app.app_context():
             # Get all firewall rules
             all_rules = FirewallRule.query.all()
 
-            # Get unique system_types
-            system_types = list(
-                set([rule.system_type for rule in all_rules if rule.system_type]))
+            # Get unique system_types (sorted)
+            system_types = sorted(
+                set([rule.system_type for rule in all_rules if rule.system_type])
+            )
 
-             if "Template" not in system_types:
+            # Ensure Template and Others are present
+            if "Template" not in system_types:
                 system_types.append("Template")
             if "Others" not in system_types:
                 system_types.append("Others")
-
-            system_types=sorted(system_types)
 
             # Get categories with their system_types
             categories = []
@@ -1024,7 +1023,10 @@ def get_mysql_options():
                         'system_type': rule.system_type,
                         'display': rule.category
                     }
-                    if not any(e['value'] == cat_entry['value'] and e['system_type'] == cat_entry['system_type'] for e in categories):
+                    if not any(
+                        e['value'] == cat_entry['value'] and e['system_type'] == cat_entry['system_type']
+                        for e in categories
+                    ):
                         categories.append(cat_entry)
 
             # Process source and destination IPs
@@ -1043,7 +1045,6 @@ def get_mysql_options():
                         "service": rule.service or "",
                         "description": rule.description or "",
                         "is_valid_ip": looks_like_ip(rule.source_ip),
-
                         "corresponding_destination_ip": rule.destination_ip or "",
                         "corresponding_destination_host": rule.destination_host or "",
                         "corresponding_service": rule.service or "",
@@ -1068,8 +1069,7 @@ def get_mysql_options():
                     })
 
             # Get unique services
-            services = list(
-                set([rule.service for rule in all_rules if rule.service]))
+            services = sorted(set([rule.service for rule in all_rules if rule.service]))
 
             return jsonify({
                 "system_types": system_types,
@@ -1091,20 +1091,21 @@ def create_acl_request(current_user):
     """Create new ACL request with validation"""
     try:
         data = request.get_json()
-        
+
         if not data:
             return jsonify({'error': 'No data provided'}), 400
-        
+
         # validate the request payload
         errors = validate_request_payload(data)
-        
+
         if errors:
             return jsonify({
                 'error': 'Validation failed',
                 'details': errors
             }), 400
 
-        required_fields = ['system_type', 'category', 'sourceIP', 'destinationIP', 'service']
+        required_fields = ['system_type', 'category',
+                           'sourceIP', 'destinationIP', 'service']
         for field in required_fields:
             if not data.get(field):
                 return jsonify({"error": f"Missing required field: {field}"}), 400
@@ -1142,14 +1143,14 @@ def create_bulk_acl_requests(current_user):
     '''creation of bulk acl_requests route'''
     try:
         data = request.get_json()
-        
+
         if not data or 'requests' not in data:
-            return jsonify({'error':'no data provided'}), 400
-        
+            return jsonify({'error': 'no data provided'}), 400
+
         requests_data = data['requests']
-        
+
         validation_errors = validate_bulk_requests(requests_data)
-        
+
         if validation_errors:
             return jsonify({
                 'error': 'validation failed for some requests',
@@ -1157,9 +1158,9 @@ def create_bulk_acl_requests(current_user):
                 'failed count': len(validation_errors),
                 'total_count': len(requests_data)
             }), 400
-            
+
         created_requests = []
-        
+
         for req_data in requests_data:
             new_request = ACLRequest(
                 requester=current_user.username,
@@ -1174,9 +1175,9 @@ def create_bulk_acl_requests(current_user):
             )
             db.session.add(new_request)
             created_requests.append(new_request)
-            
+
         db.session.commit()
-        
+
         return jsonify({
             'message': f'{len(created_requests)} ACL Requests submitted successfully',
             'count': len(created_requests),
@@ -1198,13 +1199,14 @@ def create_bulk_acl_requests(current_user):
 def create_request_from_template(current_user, template_id):
     '''create an acl request form the templates'''
     try:
-        template = Templates.query.filter_by(id=template_id, is_active=True).first()
-        
+        template = Templates.query.filter_by(
+            id=template_id, is_active=True).first()
+
         if not template:
             return jsonify({'error': 'template not found'}), 404
-        
+
         data = request.get_json() or {}
-        
+
         new_request = ACLRequest(
             requester=current_user.username,
             system_type=data.get('system_type', template.system_type,),
@@ -1212,16 +1214,17 @@ def create_request_from_template(current_user, template_id):
             source_ip=data.get('source_ip', template.source_ip),
             source_host=data.get('source_host', template.source_host),
             destination_ip=data.get('destination_ip', template.destination_ip),
-            destination_host=data.get('destination_host', template.destination_host),
+            destination_host=data.get(
+                'destination_host', template.destination_host),
             service=data.get('service', template.service),
             description=data.get('description', template.description),
             action=data.get('action', template.action),
             status='pending',
-            template_id=template_id #track which template was used
+            template_id=template_id  # track which template was used
         )
         db.session.add(new_request)
         db.session.commit()
-        
+
         return jsonify({
             'message': 'ACL request created successfully',
             'request': {
@@ -1244,7 +1247,7 @@ def get_template_system_types(current_user):
         system_types = db.session.query(
             Templates.system_type
         ).filter_by(is_active=True).distinct().all()
-        
+
         return jsonify({
             'system_types': [st[0] for st in system_types]
         }), 200
@@ -1258,19 +1261,19 @@ def bulk_create_templates(current_user):
     '''create bulk templates at once by admin'''
     try:
         data = request.get_json()
-        
+
         if not data or 'templates' not in data:
             return jsonify({'error': 'No templats provided'}), 400
-        
+
         templates_data = data['templates']
         created_templates = []
         errors = []
-        
+
         for idx, template_data in enumerate(templates_data):
             try:
                 # validate required fields
                 required_fields = ['template_name', 'system_type', 'category',
-                                 'source_ip', 'destination_ip', 'service']
+                                   'source_ip', 'destination_ip', 'service']
                 for field in required_fields:
                     if field not in template_data or not template_data[field]:
                         errors.append({
@@ -1293,18 +1296,18 @@ def bulk_create_templates(current_user):
                     action=template_data.get('action', 'allow'),
                     created_by=current_user.username
                 )
-                
+
                 db.session.add(new_template)
                 created_templates.append(new_template)
-                
+
             except Exception as e:
                 errors.append({
-                'index': idx,
-                'error': str(e)
+                    'index': idx,
+                    'error': str(e)
                 })
         if created_templates:
             db.session.commit()
-        
+
         return jsonify({
             'message': f"created {len(created_templates)} template(s)",
             'created_count': len(created_templates),
@@ -1312,7 +1315,7 @@ def bulk_create_templates(current_user):
             'templates': [t.to_json() for t in created_templates],
             'errors': errors if errors else None
         }), 201 if created_templates else 400
-    
+
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': f'Bulk template creation failed. {str(e)}'}), 500
@@ -1350,7 +1353,7 @@ def auto_populate_fields():
     """Auto-population"""
     try:
         data = request.json
-        
+
         system_type = data.get('system_type', '')
         category = data.get('category', '')
         source_ip = data.get('sourceIP', '').strip()
@@ -1395,7 +1398,7 @@ def auto_populate_fields():
                         "service": rule.service or "",
                         "description": rule.description or "",
                         "matched_by": "destination_ip",
-                        "rule_id": rule.id #included for verification
+                        "rule_id": rule.id  # included for verification
                     })
                 return jsonify({'error': 'No matching rules Found'}), 200
             return jsonify({"error": "No Source ip or destination ip has been provided"}), 200
@@ -1542,11 +1545,11 @@ def create_template(current_user):
     # admin create template
     try:
         data = request.get_json()
-        
+
         if not data:
             return jsonify({'error': 'No data provided'}), 400
 
-        required_fields = ['template_name', 'system_type', 'category', 
+        required_fields = ['template_name', 'system_type', 'category',
                            'source_ip', 'destination_ip', 'service']
 
         for field in required_fields:
@@ -1563,23 +1566,22 @@ def create_template(current_user):
         service_validation = validate_service(data['service'])
         if not service_validation:
             return jsonify({'error': f"The service is invalid. {service_validation[1]}"}), 400
-        
+
         # validate description if it exists in the data body
         if data.get('description'):
             desc_validation = validate_description(data['description'])
             if not desc_validation:
                 return jsonify({'error': f"descripton invalid {desc_validation[1]}"}), 400
-        
+
         # check for duplicates
         existing_template = Templates.query.filter_by(
             template_name=data['template_name'],
             is_active=True
         ).first()
-        
+
         if existing_template:
             return jsonify({'error': 'Template already exists'}), 409
-        
-        
+
         new_template = Templates(
             template_name=data['template_name'],
             requester=data.get('requester', None),
@@ -1594,16 +1596,16 @@ def create_template(current_user):
             action=data.get('action', 'allow'),
             created_by=current_user.username
         )
-        
+
         db.session.add(new_template)
         db.session.commit()
-        
+
         return jsonify({
             'message': 'Template created successfully',
             'template_id': new_template.id,
             'template': new_template.to_json()
-            }), 201
-        
+        }), 201
+
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': f'Failed to create template: {str(e)}'}), 500
@@ -1615,50 +1617,51 @@ def create_multi_rule_template(current_user):
     """Create a template with multiple rules"""
     try:
         data = request.get_json()
-        
+
         if not data or 'template_name' not in data or 'rules' not in data:
             return jsonify({'error': 'Missing required fields: template_name and rules'}), 400
-        
+
         template_name = data['template_name']
         rules = data['rules']  # Array of rule objects
-        
+
         if not rules or len(rules) == 0:
             return jsonify({'error': 'Template must have at least one rule'}), 400
-        
+
         # Check for duplicate template name
         existing = Templates.query.filter_by(
             template_name=template_name,
             is_active=True
         ).first()
-        
+
         if existing:
             return jsonify({'error': 'Template with this name already exists'}), 409
-        
+
         created_templates = []
-        
+
         # Create multiple template entries (one per rule) with same template_name
         for idx, rule_data in enumerate(rules):
             # Validate required fields for each rule
-            required = ['system_type', 'category', 'source_ip', 'destination_ip', 'service']
+            required = ['system_type', 'category',
+                        'source_ip', 'destination_ip', 'service']
             for field in required:
                 if field not in rule_data or not rule_data[field]:
                     return jsonify({
                         'error': f'Missing required field "{field}" in rule #{idx + 1}'
                     }), 400
-            
+
             # Validate IPs and service
             source_valid = validate_ip(rule_data['source_ip'])
             if not source_valid[0]:
                 return jsonify({'error': f'Rule #{idx + 1}: Invalid source IP - {source_valid[1]}'}), 400
-            
+
             dest_valid = validate_ip(rule_data['destination_ip'])
             if not dest_valid[0]:
                 return jsonify({'error': f'Rule #{idx + 1}: Invalid destination IP - {dest_valid[1]}'}), 400
-            
+
             service_valid = validate_service(rule_data['service'])
             if not service_valid[0]:
                 return jsonify({'error': f'Rule #{idx + 1}: Invalid service - {service_valid[1]}'}), 400
-            
+
             # Create template entry
             new_template = Templates(
                 template_name=template_name,  # Same name for all rules in this template
@@ -1675,19 +1678,19 @@ def create_multi_rule_template(current_user):
                 action=rule_data.get('action', 'allow'),
                 created_by=current_user.username
             )
-            
+
             db.session.add(new_template)
             created_templates.append(new_template)
-        
+
         db.session.commit()
-        
+
         return jsonify({
             'message': f'Multi-rule template "{template_name}" created with {len(created_templates)} rules',
             'template_name': template_name,
             'rule_count': len(created_templates),
             'rules': [t.to_json() for t in created_templates]
         }), 201
-        
+
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': f'Failed to create multi-rule template: {str(e)}'}), 500
@@ -1701,7 +1704,7 @@ def get_grouped_templates(current_user):
         all_templates = Templates.query.filter_by(is_active=True).order_by(
             Templates.template_name, Templates.rule_index
         ).all()
-        
+
         # Group by template_name
         grouped = {}
         for template in all_templates:
@@ -1714,15 +1717,15 @@ def get_grouped_templates(current_user):
                     'rule_count': 0,
                     'rules': []
                 }
-            
+
             grouped[name]['rules'].append(template.to_json())
             grouped[name]['rule_count'] += 1
-        
+
         return jsonify({
             'templates': list(grouped.values()),
             'count': len(grouped)
         }), 200
-        
+
     except Exception as e:
         return jsonify({'error': f'Failed to fetch templates: {str(e)}'}), 500
 
@@ -1786,7 +1789,8 @@ def validate_requests(current_user):
 
             # Validate Description (if provided and not empty)
             if 'description' in req and req['description'] and req['description'].strip():
-                desc_valid, desc_error = validate_description(req['description'])
+                desc_valid, desc_error = validate_description(
+                    req['description'])
                 if not desc_valid:
                     row_errors['description'] = desc_error
                     has_errors = True
@@ -1813,48 +1817,47 @@ def validate_requests(current_user):
         return jsonify({'error': f'Validation failed: {str(e)}'}), 500
 
 
-
-@app.route('/api/v1/admin/templates/<id>', methods= ['PUT'])
+@app.route('/api/v1/admin/templates/<id>', methods=['PUT'])
 @token_required('admin')
 def update_template(current_user, id):
     """Update a template by ID"""
     try:
         data = request.get_json()
-        
+
         if not data:
             return jsonify({'error': 'No data provided'}), 400
-        
-        template = Templates.query.filter_by(id=id, is_active=True).first()        
+
+        template = Templates.query.filter_by(id=id, is_active=True).first()
         if not template:
             return jsonify({'error': 'Template not found'}), 404
-        
+
         # validate source ip if is being updated
         if 'source_ip' in data:
             source_ip_validation = validate_ip(data['source_ip'])
             if not source_ip_validation:
                 return jsonify({'error': f"Source ip is invalid. {source_ip_validation[1]}"}), 400
-            template.source_ip =  data['source_ip']
-        
+            template.source_ip = data['source_ip']
+
         # validate destination ip if is being updated
         if 'destination_ip' in data:
             dest_ip_validation = validate_ip(data['destination_ip'])
             if not dest_ip_validation:
                 return jsonify({'error': f"destination ip is invalid. {dest_ip_validation[1]}"}), 400
-            template.destination_ip =  data['destination_ip']
+            template.destination_ip = data['destination_ip']
         # validate service if is being updated
         if 'service' in data:
             service_validation = validate_service(data['service'])
             if not service_validation:
                 return jsonify({'error': f"service is invalid. {service_validation[1]}"}), 400
-            template.service =  data['service']
+            template.service = data['service']
 
         # validate description if is being updated
         if 'description' in data:
             description_validation = validate_description(data['description'])
             if not source_ip_validation:
                 return jsonify({'error': f"description is invalid. {description_validation[1]}"}), 400
-            template.description =  data['description']
-            
+            template.description = data['description']
+
         # check for duplicate template name if being changed
         if 'template_name' in data and data['template_name'] != template.template_name:
             existing_template = Templates.query.filter_by(
@@ -1864,7 +1867,7 @@ def update_template(current_user, id):
             if existing_template:
                 return jsonify({'error': 'Template already exists'})
             template.template_name = data['template_name']
-            
+
         if 'requester' in data:
             template.requester = data['requester']
         if 'system_type' in data:
@@ -1879,12 +1882,12 @@ def update_template(current_user, id):
             template.action = data['action']
 
         db.session.commit()
-        
+
         return jsonify({
             'message': 'Template updated successfully',
             'template': template.to_json()
-            }), 200
-    
+        }), 200
+
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': f'Failed to update template: {str(e)}'}), 500
@@ -1896,23 +1899,23 @@ def delete_template(current_user, id):
     """soft Delete a template by id"""
     try:
         template = Templates.query.get(id)
-        
+
         if not template:
             return jsonify({'error': 'Template not found'}), 404
-        
+
         if not template.is_active:
             return jsonify({'error': 'template already deleted'}), 400
-        
+
         template.is_active = False
         template.updated_at = datetime.utcnow()
-        
+
         db.session.commit()
-        
+
         return jsonify({
             'message': 'Template deleted successfully',
             'template_id': id
-            }), 200
-    
+        }), 200
+
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': f'Failed to delete template: {str(e)}'}), 500
@@ -1924,18 +1927,18 @@ def delete_template_permanently(current_user, id):
     '''hard delete the templates'''
     try:
         template = Templates.query.get(id)
-        
+
         if not template:
             return jsonify({'error': 'Template not found'}), 404
-        
+
         db.session.delete(template)
         db.session.commit()
-        
+
         return jsonify({
             'message': 'Template deleted permanently',
             'template_id': id
         }), 200
-        
+
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': f'Failed to delete template: {str(e)}'}), 500
@@ -1949,19 +1952,19 @@ def get_template(current_user):
         system_type = request.args.get('system_type')
         category = request.args.get('category')
         requester = request.args.get('requester')
-        
+
         query = Templates.query.filter_by(is_active=True)
-        
+
         # apply filters
         if system_type:
             query = query.filter_by(system_type=system_type)
-            
+
         if category:
             query = query.filter_by(category=category)
-            
+
         if requester:
             query = query.filter_by(requester=requester)
-            
+
         # order by most recent first
         templates = Templates.query.order_by(
             Templates.created_at.desc()).all()
@@ -1970,12 +1973,12 @@ def get_template(current_user):
                 'message': 'No templates found',
                 'templates': []
             }), 200
-            
+
         return jsonify({
-                'message': f"Found {len(templates)} templates",
-                'count': len(templates),
-                'templates': [template.to_json() for template in templates]
-            }), 200
+            'message': f"Found {len(templates)} templates",
+            'count': len(templates),
+            'templates': [template.to_json() for template in templates]
+        }), 200
     except Exception as e:
         return jsonify({'error': f"Error occured during template retreival. {str(e)}"}), 500
 
@@ -1986,17 +1989,16 @@ def get_template_by_id(current_user, id):
     # get a specific template by id
     try:
         template = Templates.query.filter_by(id=id, is_active=True).first()
-        
+
         if not template:
             return jsonify({'error': 'Template not found'}), 404
-        
+
         return jsonify({
             'template': template.to_json()
         }), 200
-        
+
     except Exception as e:
         return jsonify({'error': f"Failed to fetch template. {str(e)}"}), 500
-
 
 
 # single excel generation per request submission
@@ -2011,7 +2013,8 @@ def generate_submission_xlsx(current_user):
         if 'request_ids' in data:
             # Fetch by IDs
             request_ids = data['request_ids']
-            requests = ACLRequest.query.filter(ACLRequest.id.in_(request_ids)).all()
+            requests = ACLRequest.query.filter(
+                ACLRequest.id.in_(request_ids)).all()
         elif 'requests' in data:
             # Create from submitted data (for immediate download after submission)
             requests = data['requests']
@@ -2042,9 +2045,11 @@ def generate_submission_xlsx(current_user):
         others_row_color = 'FFE699'  # Light orange for "Others"
 
         # Define header style
-        header_fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
+        header_fill = PatternFill(
+            start_color='4472C4', end_color='4472C4', fill_type='solid')
         header_font = Font(bold=True, color='FFFFFF', size=11)
-        header_alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        header_alignment = Alignment(
+            horizontal='center', vertical='center', wrap_text=True)
 
         # Define border style
         thin_border = Border(
@@ -2102,7 +2107,8 @@ def generate_submission_xlsx(current_user):
                     req.service,
                     req.reason,
                     req.status,
-                    req.created_at.strftime("%Y-%m-%d %H:%M:%S") if req.created_at else 'N/A'
+                    req.created_at.strftime(
+                        "%Y-%m-%d %H:%M:%S") if req.created_at else 'N/A'
                 ]
                 system_type = req.system_type
                 status = req.status
@@ -2115,10 +2121,12 @@ def generate_submission_xlsx(current_user):
 
             # Get the status color for this row
             status_color = status_colors.get(status, 'FFFFFF')
-            status_fill = PatternFill(start_color=status_color, end_color=status_color, fill_type='solid')
+            status_fill = PatternFill(
+                start_color=status_color, end_color=status_color, fill_type='solid')
 
             # NEW: Row fill for "Others" system type
-            others_fill = PatternFill(start_color=others_row_color, end_color=others_row_color, fill_type='solid')
+            others_fill = PatternFill(
+                start_color=others_row_color, end_color=others_row_color, fill_type='solid')
 
             if is_others_system:
                 row_fill = PatternFill(
@@ -2133,7 +2141,7 @@ def generate_submission_xlsx(current_user):
                     fill_type='solid'
                 )
             else:
-                row_fill=None
+                row_fill = None
 
             # Apply styling to each cell in the row
             for col_idx, cell in enumerate(ws[row_idx], start=1):
@@ -2157,21 +2165,25 @@ def generate_submission_xlsx(current_user):
                 if col_idx == 11:
                     cell.fill = status_fill
                     cell.font = Font(bold=True)
-                    cell.alignment = Alignment(horizontal='center', vertical='center')
+                    cell.alignment = Alignment(
+                        horizontal='center', vertical='center')
 
                 # Highlight IP addresses (columns 5, 7) - only if NOT "Others"
                 elif col_idx in [5, 7] and not is_others_system:
-                    cell.fill = PatternFill(start_color='E7E6E6', end_color='E7E6E6', fill_type='solid')
+                    cell.fill = PatternFill(
+                        start_color='E7E6E6', end_color='E7E6E6', fill_type='solid')
                     cell.font = Font(name='Courier New')
 
                 # Highlight Service (column 9) - only if NOT "Others"
                 elif col_idx == 9 and not is_others_system:
-                    cell.fill = PatternFill(start_color='FCE4D6', end_color='FCE4D6', fill_type='solid')
+                    cell.fill = PatternFill(
+                        start_color='FCE4D6', end_color='FCE4D6', fill_type='solid')
                     cell.font = Font(name='Courier New')
 
                 # NEW: Highlight System Type column (column 3) for "Others"
                 elif col_idx == 3 and is_others_system:
-                    cell.fill = PatternFill(start_color='FF9900', end_color='FF9900', fill_type='solid')
+                    cell.fill = PatternFill(
+                        start_color='FF9900', end_color='FF9900', fill_type='solid')
                     cell.font = Font(bold=True, color='FFFFFF')
 
         # Auto-adjust column widths
@@ -2209,10 +2221,12 @@ def generate_submission_xlsx(current_user):
         )
 
         ws[f'A{legend_row + 2}'] = 'Yellow status = Pending'
-        ws[f'A{legend_row + 2}'].fill = PatternFill(start_color='FFF3CD', end_color='FFF3CD', fill_type='solid')
+        ws[f'A{legend_row + 2}'].fill = PatternFill(
+            start_color='FFF3CD', end_color='FFF3CD', fill_type='solid')
 
         ws[f'A{legend_row + 3}'] = 'Green status = Approved'
-        ws[f'A{legend_row + 3}'].fill = PatternFill(start_color='D4EDDA', end_color='D4EDDA', fill_type='solid')
+        ws[f'A{legend_row + 3}'].fill = PatternFill(
+            start_color='D4EDDA', end_color='D4EDDA', fill_type='solid')
 
         file_stream = BytesIO()
         wb.save(file_stream)
@@ -2231,7 +2245,6 @@ def generate_submission_xlsx(current_user):
     except Exception as e:
         print(f"Error generating submission Excel: {e}")
         return jsonify({'error': f'Failed to generate Excel report: {str(e)}'}), 500
-
 
 
 @app.route('/api/v1/generate-xlsx', methods=['GET'])
@@ -2263,9 +2276,11 @@ def generate_xlsx_enhanced(current_user):
         others_row_color = 'FFE699'
 
         # Define header style
-        header_fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
+        header_fill = PatternFill(
+            start_color='4472C4', end_color='4472C4', fill_type='solid')
         header_font = Font(bold=True, color='FFFFFF', size=11)
-        header_alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        header_alignment = Alignment(
+            horizontal='center', vertical='center', wrap_text=True)
 
         # Define border style
         thin_border = Border(
@@ -2304,7 +2319,8 @@ def generate_xlsx_enhanced(current_user):
                 req.service,
                 req.reason,
                 req.status,
-                req.created_at.strftime("%Y-%m-%d %H:%M:%S") if req.created_at else 'N/A'
+                req.created_at.strftime(
+                    "%Y-%m-%d %H:%M:%S") if req.created_at else 'N/A'
             ])
 
             # Get the status color for 'others' row
@@ -2312,10 +2328,12 @@ def generate_xlsx_enhanced(current_user):
 
             # Get the status color for this row
             status_color = status_colors.get(status, 'FFFFFF')
-            status_fill = PatternFill(start_color=status_color, end_color=status_color, fill_type='solid')
+            status_fill = PatternFill(
+                start_color=status_color, end_color=status_color, fill_type='solid')
 
             # Row fill for "Others" system type
-            others_fill = PatternFill(start_color=others_row_color, end_color=others_row_color, fill_type='solid')
+            others_fill = PatternFill(
+                start_color=others_row_color, end_color=others_row_color, fill_type='solid')
 
             # Apply styling to each cell in the row
             for col_idx, cell in enumerate(ws[row_idx], start=1):
@@ -2326,16 +2344,19 @@ def generate_xlsx_enhanced(current_user):
                 if col_idx == 11:
                     cell.fill = status_fill
                     cell.font = Font(bold=True)
-                    cell.alignment = Alignment(horizontal='center', vertical='center')
+                    cell.alignment = Alignment(
+                        horizontal='center', vertical='center')
 
                 # Highlight IP addresses (columns 5, 7)
                 elif col_idx in [5, 7]:
-                    cell.fill = PatternFill(start_color='E7E6E6', end_color='E7E6E6', fill_type='solid')
+                    cell.fill = PatternFill(
+                        start_color='E7E6E6', end_color='E7E6E6', fill_type='solid')
                     cell.font = Font(name='Courier New')
 
                 # Highlight Service (column 9)
                 elif col_idx == 9:
-                    cell.fill = PatternFill(start_color='FCE4D6', end_color='FCE4D6', fill_type='solid')
+                    cell.fill = PatternFill(
+                        start_color='FCE4D6', end_color='FCE4D6', fill_type='solid')
                     cell.font = Font(name='Courier New')
 
         # Auto-adjust column widths
@@ -2381,7 +2402,7 @@ def get_help(current_user):
     try:
         help_info = {
             'overview': 'This service allows users to create Access Control List (ACL) requests based on predefined firewall rules.',
-            
+
             'how_to_create_request': {
                 'steps': [
                     '1. Select System Type - Choose the environment (Production, Staging, etc.)',
@@ -2400,40 +2421,40 @@ def get_help(current_user):
                     'Provide detailed descriptions for faster approval'
                 ]
             },
-            
+
             'validation_rules': {
                 'ip_addresses': 'Must be valid IPv4 (x.x.x.x) or CIDR (x.x.x.x/24). Octets 0-255. Special values: any, all, subnet',
                 'services': 'Port (1-65535), range (80-90), protocol/port (tcp/80), or service name (http, https, ssh)',
                 'description': 'Minimum 10 characters, maximum 500 characters'
             },
-            
+
             'templates': {
                 'info': 'Admins can create templates for common ACL patterns',
                 'usage': 'Click "Use Template" button to quickly populate form with pre-approved configurations'
             },
-            
+
             'request_status': {
                 'pending': 'Awaiting admin review',
                 'approved': 'Request approved and implemented',
                 'rejected': 'Request denied - check with admin for details'
             },
-            
+
             'role_permissions': {
                 'user': 'Create ACL requests, view own requests, use templates',
                 'reviewer': 'Review and approve/reject requests',
                 'admin': 'Full access - create templates, manage users, approve requests'
             },
-            
+
             'bulk_operations': 'Use "Add Another Request" to create multiple ACL requests at once. All will be validated before submission.',
-            
+
             'export': f'{"Admins" if current_user.role == "admin" else "You"} can download Excel reports of ACL requests',
-            
+
             'contact_support': {
                 'email': 'support@example.com',
                 'note': 'For technical issues or questions about request status'
             }
         }
-        
+
         return jsonify(help_info), 200
     except Exception as e:
         return jsonify({'error': f"Failed to retrieve help: {str(e)}"}), 500
@@ -2549,9 +2570,12 @@ def get_template_dropdown_options(current_user):
         all_rules = FirewallRule.query.all()
 
         # Extract unique values
-        system_types = sorted(list(set([rule.system_type for rule in all_rules if rule.system_type])))
-        categories = sorted(list(set([rule.category for rule in all_rules if rule.category])))
-        services = sorted(list(set([rule.service for rule in all_rules if rule.service])))
+        system_types = sorted(
+            list(set([rule.system_type for rule in all_rules if rule.system_type])))
+        categories = sorted(
+            list(set([rule.category for rule in all_rules if rule.category])))
+        services = sorted(
+            list(set([rule.service for rule in all_rules if rule.service])))
 
         # Get unique source IPs with their details
         source_ips = []
