@@ -184,7 +184,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 uv sync
 
 # Setup database
-mysql -u root -p < schema.sql
+mysql -u root -p < backup.sql
 
 # Run migrations
 flask db upgrade
