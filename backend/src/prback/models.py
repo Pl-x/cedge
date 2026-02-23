@@ -1,4 +1,11 @@
-from config import db
+'''This module defines the database models for the ACL request management system. 
+It includes models for storing user input (ACLRequest), firewall rules (FirewallRule), 
+user information (User), and templates for ACL requests (Templates). Each model is defined as 
+a SQLAlchemy model, with appropriate fields and methods for converting to JSON format for 
+frontend use. The models also include timestamps for tracking creation and updates, as well 
+as relationships between different entities where necessary.
+'''
+from .extensions import db
 from datetime import datetime, timezone
 
 # Store user input
