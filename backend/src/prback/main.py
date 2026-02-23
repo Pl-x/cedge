@@ -6,13 +6,27 @@ import threading
 import time
 import re
 import logging
+import sys
 
 from .models import FirewallRule
 from .extensions import db
 from .config import GOOGLE_SHEETS
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.setLevel(logging.DEBUG)
 logger = logging.getLogger(__name__)
+
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setLevel(logging.INFO)
+console_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+console_handler.setFormatter(console_formatter)
+
+file_handler = logging.FileHandler('app.log')
+file_handler.setLevel(logging.DEBUG)
+file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+file_handler.setFormatter(file_formatter)
+
+logger.addHandler(console_handler)
+logger.addHandler(file_handler)
 
 EXCEL_URL = GOOGLE_SHEETS['MAIN_SHEET']
 
