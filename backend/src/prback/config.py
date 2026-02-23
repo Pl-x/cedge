@@ -50,7 +50,7 @@ def create_app():
         r"/*": {
             "origins": ["http://localhost:", "http://localhost:80", "http://localhost:5173"],
             "methods": ["POST", "GET", "PUT", "DELETE", "OPTIONS"],
-            "allowed_headers": ["Content-Type", "Authorization"]
+            "allow_headers": ["Content-Type", "Authorization"]
         }
     })
     db.init_app(app)

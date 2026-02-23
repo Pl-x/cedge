@@ -43,7 +43,7 @@ def token_required(required_role=None):
             except jwt.InvalidTokenError:
                 return jsonify({'error': 'Invalid token. Please login again'}), 401
             except Exception as e:
-                return jsonify({'error': f'Token validation error {str(e)}'}), 401
+                return jsonify({'error': 'Token validation error'}), 401
 
             return f(current_user, *args, **kwargs)
         return decorated
