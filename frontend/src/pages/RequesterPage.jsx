@@ -863,232 +863,202 @@ return (
             </tr>
           </thead>
           <tbody>
-            {requests.map((request, index) => {
-              const rowErrors = validationErrors[index] || {};
-              const hasErrors = Object.keys(rowErrors).length > 0;
+          {requests.map((request, index) => {
+            const rowErrors = validationErrors[index] || {};
+            const hasErrors = Object.keys(rowErrors).length > 0;
 
-              return (
-                <tr key={index} className={hasErrors ? 'error-row' : ''}>
-                  <td>
-                    {request.system_type}
-                    {isTemplateCategory(index) && (
-                      <span
-                        style={{
-                          marginLeft: '8px',
-                          padding: '2px 8px',
-                          backgroundColor: '#E2EFDA',
-                          color: '#2F5233',
-                          borderRadius: '12px',
-                          fontSize: '0.75rem',
-                          fontWeight: 'bold'
-                        }}
-                        title={`From template: ${request._templateName || 'Unknown'}`}
-                      >
-                        📋 Template
-                      </span>
-                    )}
-                    {isOthersCategory(index) && (
-                      <span
-                        style={{
-                          marginLeft: '8px',
-                          padding: '2px 8px',
-                          backgroundColor: '#FFE699',
-                          color: '#856404',
-                          borderRadius: '12px',
-                          fontSize: '0.75rem',
-                          fontWeight: 'bold'
-                        }}
-                      >
-                        ✏️ Manual
-                      </span>
-                    )}
-                  </td>
+            return (
+              <tr key={index} className={hasErrors ? 'error-row' : ''}>
 
-                  <td>
-                    {isOthersCategory(index) || isTemplateCategory(index) ? (
-                      <input
-                        type="text"
-                        value={request.category}
-                        onChange={(e) => updateRequest(index, 'category', e.target.value)}
-                        placeholder={isTemplateCategory(index) ? "From template" : "Enter category"}
-                        disabled={isTemplateCategory(index)}  // Disable for template (pre-filled)
-                        style={{
-                          backgroundColor: isTemplateCategory(index) ? '#E2EFDA' : 'white', fontWeight: isTemplateCategory(index) ? 'bold' : 'normal'
-                        }}
-                      />
-                    ) : (
-                      <select
-                        value={request.category}
-                        onChange={(e) => updateRequest(index, 'category', e.target.value)}
-                        disabled={!request.system_type}
-                        required
-                      >
-                        <option value="">Select Category</option>
-                        {getFilteredCategories(index).map((cat, idx) => (
-                          <option key={idx} value={cat.value}>{cat.display}</option>
-                        ))}
-                      </select>
-                    )}
-                    {rowErrors.category && (
-                      <div className="field-error">{rowErrors.category}</div>
-                    )}
-                  </td>
+              {/* COLUMN 1: System Type (Merged Display + Input) */}
+              <td>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+              <select
+              value={request.system_type}
+              onChange={(e) => updateRequest(index, 'system_type', e.target.value)}
+              required
+              >
+              <option value="">Select System Type</option>
+              {options.system_types.map((st, idx) => (
+                <option key={idx} value={st}>{st}</option>
+              ))}
+              </select>
 
-                  <td>
-                    <select
-                      value={request.system_type}
-                      onChange={(e) => updateRequest(index, 'system_type', e.target.value)}
-                      required
-                    >
-                      <option value="">Select System Type</option>
-                      {options.system_types.map((st, idx) => (
-                        <option key={idx} value={st}>{st}</option>
-                      ))}
-                    </select>
-                    {rowErrors.system_type && (
-                      <div className="field-error">{rowErrors.system_type}</div>
-                    )}
-                  </td>
+              {/* Visual Badges (Optional - kept for context) */}
+              <div style={{ display: 'flex', gap: '5px' }}>
+              {isTemplateCategory(index) && (
+                <span style={{ fontSize: '0.7rem', backgroundColor: '#E2EFDA', padding: '2px 6px', borderRadius: '4px' }}>
+                📋 Template
+                </span>
+              )}
+              {isOthersCategory(index) && (
+                <span style={{ fontSize: '0.7rem', backgroundColor: '#FFE699', padding: '2px 6px', borderRadius: '4px' }}>
+                ✏️ Manual
+                </span>
+              )}
+              </div>
+              </div>
+              {rowErrors.system_type && (
+                <div className="field-error">{rowErrors.system_type}</div>
+              )}
+              </td>
 
-                  <td>
-                    {request.system_type === "Others" ? (
-                      <input
-                        type="text"
-                        value={request.category}
-                        onChange={(e) => updateRequest(index, 'category', e.target.value)}
-                        placeholder="Enter category"
-                      />
-                    ) : (
-                      <select
-                        value={request.category}
-                        onChange={(e) => updateRequest(index, 'category', e.target.value)}
-                        disabled={!request.system_type}
-                        required
-                      >
-                        <option value="">Select Category</option>
-                        {getFilteredCategories(index).map((cat, idx) => (
-                          <option key={idx} value={cat.value}>{cat.display}</option>
-                        ))}
-                      </select>
-                    )}
-                    {rowErrors.category && (
-                      <div className="field-error">{rowErrors.category}</div>
-                    )}
-                  </td>
+              {/* COLUMN 2: Category (Kept only one instance) */}
+              <td>
+              {isOthersCategory(index) || isTemplateCategory(index) ? (
+                <input
+                type="text"
+                value={request.category}
+                onChange={(e) => updateRequest(index, 'category', e.target.value)}
+                placeholder={isTemplateCategory(index) ? "From template" : "Enter category"}
+                disabled={isTemplateCategory(index)}
+                style={{
+                  backgroundColor: isTemplateCategory(index) ? '#E2EFDA' : 'white',
+                                                                       fontWeight: isTemplateCategory(index) ? 'bold' : 'normal'
+                }}
+                />
+              ) : (
+                <select
+                value={request.category}
+                onChange={(e) => updateRequest(index, 'category', e.target.value)}
+                disabled={!request.system_type}
+                required
+                >
+                <option value="">Select Category</option>
+                {getFilteredCategories(index).map((cat, idx) => (
+                  <option key={idx} value={cat.value}>{cat.display}</option>
+                ))}
+                </select>
+              )}
+              {rowErrors.category && (
+                <div className="field-error">{rowErrors.category}</div>
+              )}
+              </td>
 
-                  <td>
-                    <input
-                      list={`sourceIP-options-${index}`}
-                      value={request.sourceIP}
-                      onChange={(e) => updateRequest(index, 'sourceIP', e.target.value)}
-                      placeholder="Source IP"
-                      className={rowErrors.sourceIP ? 'input-error' : ''}
-                      required
-                    />
-                    <datalist id={`sourceIP-options-${index}`}>
-                      {getFilteredSourceIPs(index).map((ip, idx) => (
-                        <option key={idx} value={ip.value} />
-                      ))}
-                    </datalist>
-                    {rowErrors.sourceIP && (
-                      <div className="field-error">{rowErrors.sourceIP}</div>
-                    )}
-                  </td>
+              {/* DELETED: The duplicate System Type <select> td was here */}
+              {/* DELETED: The duplicate Category <input/select> td was here */}
 
-                  <td>
-                    <input
-                      type="text"
-                      value={request.sourceHost}
-                      onChange={(e) => updateRequest(index, 'sourceHost', e.target.value)}
-                      placeholder="Source Host"
-                    />
-                  </td>
+              {/* COLUMN 3: Source IP */}
+              <td>
+              <input
+              list={`sourceIP-options-${index}`}
+              value={request.sourceIP}
+              onChange={(e) => updateRequest(index, 'sourceIP', e.target.value)}
+              placeholder="Source IP"
+              className={rowErrors.sourceIP ? 'input-error' : ''}
+              required
+              />
+              <datalist id={`sourceIP-options-${index}`}>
+              {getFilteredSourceIPs(index).map((ip, idx) => (
+                <option key={idx} value={ip.value} />
+              ))}
+              </datalist>
+              {rowErrors.sourceIP && (
+                <div className="field-error">{rowErrors.sourceIP}</div>
+              )}
+              </td>
 
-                  <td>
-                    <input
-                      list={`destinationIP-options-${index}`}
-                      value={request.destinationIP}
-                      onChange={(e) => updateRequest(index, 'destinationIP', e.target.value)}
-                      placeholder="Destination IP"
-                      className={rowErrors.destinationIP ? 'input-error' : ''}
-                      required
-                    />
-                    <datalist id={`destinationIP-options-${index}`}>
-                      {getFilteredDestinationIPs(index).map((ip, idx) => (
-                        <option key={idx} value={ip.value} />
-                      ))}
-                    </datalist>
-                    {rowErrors.destinationIP && (
-                      <div className="field-error">{rowErrors.destinationIP}</div>
-                    )}
-                  </td>
+              {/* COLUMN 4: Source Host */}
+              <td>
+              <input
+              type="text"
+              value={request.sourceHost}
+              onChange={(e) => updateRequest(index, 'sourceHost', e.target.value)}
+              placeholder="Source Host"
+              />
+              </td>
 
-                  <td>
-                    <input
-                      type="text"
-                      value={request.destinationHost}
-                      onChange={(e) => updateRequest(index, 'destinationHost', e.target.value)}
-                      placeholder="Destination Host"
-                    />
-                  </td>
+              {/* COLUMN 5: Destination IP */}
+              <td>
+              <input
+              list={`destinationIP-options-${index}`}
+              value={request.destinationIP}
+              onChange={(e) => updateRequest(index, 'destinationIP', e.target.value)}
+              placeholder="Destination IP"
+              className={rowErrors.destinationIP ? 'input-error' : ''}
+              required
+              />
+              <datalist id={`destinationIP-options-${index}`}>
+              {getFilteredDestinationIPs(index).map((ip, idx) => (
+                <option key={idx} value={ip.value} />
+              ))}
+              </datalist>
+              {rowErrors.destinationIP && (
+                <div className="field-error">{rowErrors.destinationIP}</div>
+              )}
+              </td>
 
-                  <td>
-                    <input
-                      type="text"
-                      value={request.service}
-                      onChange={(e) => updateRequest(index, 'service', e.target.value)}
-                      placeholder="Service"
-                      className={rowErrors.service ? 'input-error' : ''}
-                      required
-                    />
-                    {rowErrors.service && (
-                      <div className="field-error">{rowErrors.service}</div>
-                    )}
-                  </td>
+              {/* COLUMN 6: Destination Host */}
+              <td>
+              <input
+              type="text"
+              value={request.destinationHost}
+              onChange={(e) => updateRequest(index, 'destinationHost', e.target.value)}
+              placeholder="Destination Host"
+              />
+              </td>
 
-                  <td>
-                    <textarea
-                      value={request.description}
-                      onChange={(e) => updateRequest(index, 'description', e.target.value)}
-                      placeholder="Description"
-                      className={rowErrors.description ? 'input-error' : ''}
-                      style={{ minWidth: '180px', minHeight: '40px' }}
-                    />
-                    {rowErrors.description && (
-                      <div className="field-error">{rowErrors.description}</div>
-                    )}
-                  </td>
+              {/* COLUMN 7: Service */}
+              <td>
+              <input
+              type="text"
+              value={request.service}
+              onChange={(e) => updateRequest(index, 'service', e.target.value)}
+              placeholder="Service"
+              className={rowErrors.service ? 'input-error' : ''}
+              required
+              />
+              {rowErrors.service && (
+                <div className="field-error">{rowErrors.service}</div>
+              )}
+              </td>
 
-                  <td>
-                    <select
-                      value={request.action}
-                      onChange={(e) => updateRequest(index, 'action', e.target.value)}
-                      required
-                      style={{ minWidth: '100px' }}
-                    >
-                      <option value="">Select</option>
-                      <option value="allow">Allow</option>
-                      <option value="deny">Deny</option>
-                    </select>
-                    {rowErrors.action && (
-                      <div className="field-error">{rowErrors.action}</div>
-                    )}
-                  </td>
+              {/* COLUMN 8: Description */}
+              <td>
+              <textarea
+              value={request.description}
+              onChange={(e) => updateRequest(index, 'description', e.target.value)}
+              placeholder="Description"
+              className={rowErrors.description ? 'input-error' : ''}
+              style={{ minWidth: '180px', minHeight: '40px' }}
+              />
+              {rowErrors.description && (
+                <div className="field-error">{rowErrors.description}</div>
+              )}
+              </td>
 
-                  <td>
-                    {requests.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeRequest(index)}
-                        className="btn-remove-row"
-                      >
-                        🗑️
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
+              {/* COLUMN 9: Action */}
+              <td>
+              <select
+              value={request.action}
+              onChange={(e) => updateRequest(index, 'action', e.target.value)}
+              required
+              style={{ minWidth: '100px' }}
+              >
+              <option value="">Select</option>
+              <option value="allow">Allow</option>
+              <option value="deny">Deny</option>
+              </select>
+              {rowErrors.action && (
+                <div className="field-error">{rowErrors.action}</div>
+              )}
+              </td>
+
+              {/* COLUMN 10: Remove Button */}
+              <td>
+              {requests.length > 1 && (
+                <button
+                type="button"
+                onClick={() => removeRequest(index)}
+                className="btn-remove-row"
+                >
+                🗑️
+                </button>
+              )}
+              </td>
+              </tr>
+            );
+          })}
           </tbody>
         </table>
       </div>
