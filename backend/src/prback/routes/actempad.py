@@ -595,11 +595,7 @@ def bulk_create_templates(current_user):
             db.session.commit()
 
         return jsonify({
-            'message': f"created {len(created_templates)} template(s)",
-            'created_count': len(created_templates),
-            'error_count': len(errors),
-            'templates': [t.to_json() for t in created_templates],
-            'errors': errors if errors else None
+            "error": "An error occured"
         }), 201 if created_templates else 400
 
     except Exception as e:
