@@ -12,8 +12,8 @@ from .models import FirewallRule
 from .extensions import db
 from .config import GOOGLE_SHEETS
 
-logging.setLevel(logging.DEBUG)
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 console_handler = logging.StreamHandler(sys.stdout)
 console_handler.setLevel(logging.INFO)
@@ -33,7 +33,6 @@ EXCEL_URL = GOOGLE_SHEETS['MAIN_SHEET']
 # Track last sync time
 last_sync_time = None
 sync_in_progress = False
-
 
 
 def automated_sync(app):
