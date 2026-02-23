@@ -5,11 +5,14 @@ from typing import List, Dict, Tuple
 import threading
 import time
 import re
+import logging
 
 from .models import FirewallRule
 from .extensions import db
 from .config import GOOGLE_SHEETS
 
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 EXCEL_URL = GOOGLE_SHEETS['MAIN_SHEET']
 
@@ -18,18 +21,19 @@ last_sync_time = None
 sync_in_progress = False
 
 
+
 def automated_sync(app):
     """Perform automated sync from Google Sheets to MySQL"""
     global last_sync_time, sync_in_progress
 
     if sync_in_progress:
-        print("🔄 Sync already in progress, skipping...")
+        logger.info("🔄 Sync already in progress, skipping...")
         return
 
     sync_in_progress = True
     try:
         with app.app_context():
-            print("🔄 Starting automated sync from Google Sheets to MySQL...")
+            logger.info("🔄 Starting automated sync from Google Sheets to MySQL...")
 
             # Load data from Google Sheets
             sheet_structures = load_excel_data()
@@ -38,25 +42,27 @@ def automated_sync(app):
                 # Sync to MySQL
                 sync_to_mysql(sheet_structures)
                 last_sync_time = datetime.now()
-                print(f"✅ Automated sync completed at {last_sync_time}")
+                logger.info(f"✅ Automated sync completed at {last_sync_time}")
             else:
-                print("❌ No data loaded from Google Sheets")
+                logger.warning("❌ No data loaded from Google Sheets")
 
     except Exception as e:
-        print(f"❌ Automated sync failed: {str(e)}")
+        logger.error(f"❌ Automated sync failed", exc_info=True)
     finally:
         sync_in_progress = False
 
 
 def incremental_sync(app):
     """Sync without deleting existing data"""
-    # I also added app.app_context to wrap all database operations
-    with app.app_context():
-        print("🔄 Performing incremental sync from Google Sheets...")
-        sheet_structures = load_excel_data()
-        if sheet_structures:
-            sync_to_mysql(sheet_structures)  # This now uses UPSERT
-            print("✅ Incremental sync completed")
+    try:
+        with app.app_context():
+            logger.info("🔄 Performing incremental sync from Google Sheets...")
+            sheet_structures = load_excel_data()
+            if sheet_structures:
+                sync_to_mysql(sheet_structures)
+                logger.info("✅ Incremental sync completed")
+    except Exception:
+        logger.error("❌ Incremental sync failed", exc_info=True)
 
 
 def periodic_sync(app):
@@ -67,22 +73,26 @@ def periodic_sync(app):
             # Wait for 24 hours (86400 seconds)
             time.sleep(86400)
         except Exception as e:
-            print(f"❌ Periodic sync error: {str(e)}")
+            logger.error(f"❌ Periodic sync error", exc_info=True)
             time.sleep(60)  # Wait 1 minute before retrying
 
 
 def start_background_sync(app):
     """Run before the first request - but only once"""
-    rule_count = FirewallRule.query.count()
-    if rule_count == 0:
-        print("🚀 No firewall rules found, performing initial sync...")
-        automated_sync(app)
-    else:
-        print(f"🚀 Found {rule_count} firewall rules, skipping initial sync")
-    # Start periodic sync in a separate thread
-    sync_thread = threading.Thread(target=periodic_sync, args=(app,), daemon=True)
-    sync_thread.start()
-    print("✅ Periodic sync thread started")
+    try:
+        rule_count = FirewallRule.query.count()
+        if rule_count == 0:
+            logger.info("🚀 No firewall rules found, performing initial sync...")
+            automated_sync(app)
+        else:
+            logger.info(f"🚀 Found {rule_count} firewall rules, skipping initial sync")
+        
+        # Start periodic sync in a separate thread
+        sync_thread = threading.Thread(target=periodic_sync, args=(app,), daemon=True)
+        sync_thread.start()
+        logger.info("✅ Periodic sync thread started")
+    except Exception:
+        logger.error("Failed to start background sync", exc_info=True)
 
 
 def load_excel_data():
@@ -90,7 +100,7 @@ def load_excel_data():
     try:
         response = requests.get(EXCEL_URL)
         if response.status_code != 200:
-            print(f"❌ Failed to fetch Excel file: {response.status_code}")
+            logger.error(f"❌ Failed to fetch Excel file: Status {response.status_code}")
             return {}
 
         excel_file = pd.ExcelFile(response.content)
@@ -105,22 +115,19 @@ def load_excel_data():
                 # Remove completely empty rows and columns
                 df_raw = df_raw.dropna(how='all').dropna(axis=1, how='all')
 
-                for i in range(min(3, len(df_raw))):
-                    print(f"   Row {i}: {df_raw.iloc[i].tolist()}")
-
                 # Process the sheet and get structured data
                 sheet_data = process_sheet_data_structured(df_raw, sheet_name)
                 sheet_structures[sheet_name] = sheet_data
 
-            except Exception as e:
-                # Still add the sheet name to structure even if there's an error
+            except Exception:
+                logger.warning(f"Failed to process sheet {sheet_name}", exc_info=True)
                 sheet_structures[sheet_name] = {}
                 continue
 
         return sheet_structures
 
-    except Exception as e:
-        print(f"❌ Error loading Excel data: {str(e)}")
+    except Exception:
+        logger.error("❌ Critical Error loading Excel data", exc_info=True)
         return {}
 
 
@@ -162,17 +169,13 @@ def detect_merged_cells(df_raw):
             non_empty_count = sum(1 for v in row_values if v)
             non_empty_other = sum(1 for v in row_values[1:] if v)
 
-            print(
+            logger.debug(
                 f"Row {row_idx}: '{first_cell}' | Non-empty: {non_empty_count} | Other: {non_empty_other}")
 
             # SIMPLE RULE: If first cell has content and most other cells are empty
             # Remove the restrictive filtering that might be blocking valid categories
             is_regular_data = (looks_like_ip(first_cell) or
                                looks_like_service(first_cell))
-
-            # Only check for header keywords
-            is_header_like = any(keyword in first_cell.lower() for keyword in
-                                 ['source', 'destination', 'ip', 'host', 'service', 'description'])
 
             if (not is_regular_data and
                 non_empty_count <= 3 and
@@ -183,12 +186,12 @@ def detect_merged_cells(df_raw):
                     'non_empty_count': non_empty_count,
                     'other_cells_empty': non_empty_other
                 }
-                print(f"   ✅ CATEGORY FOUND: '{first_cell}'")
+                logger.debug(f"   ✅ CATEGORY FOUND: '{first_cell}'")
             else:
-                print(
+                logger.debug(
                     f"   ❌ SKIPPED: '{first_cell}' - regular_data: {is_regular_data}, non_empty: {non_empty_count}, other: {non_empty_other}")
 
-    print(f"🎯 FINAL CATEGORIES: {list(merged_cells_info.keys())}")
+    logger.debug(f"🎯 FINAL CATEGORIES: {list(merged_cells_info.keys())}")
     return merged_cells_info
 
 
@@ -212,15 +215,13 @@ def process_sheet_data_structured(df_raw, sheet_name):
 
     # Use ALL detected merged categories
     valid_categories = merged_categories
-    print(f"🎯 Categories to use: {list(valid_categories.keys())}")
+    logger.debug(f"🎯 Categories to use: {list(valid_categories.keys())}")
 
     current_category = None
     category_rows = set([info['row'] for info in valid_categories.values()])
 
     # Process all rows after the header row
     for idx, row in df_raw.iterrows():
-        row_num = idx + 1
-
         # Skip rows before and including the header row
         if header_row_idx is not None and idx <= header_row_idx:
             continue
@@ -237,7 +238,7 @@ def process_sheet_data_structured(df_raw, sheet_name):
             for category_name, category_info in valid_categories.items():
                 if category_info['row'] == idx:
                     current_category = category_name
-                    print(f"   📍 Row {idx} is category: '{current_category}'")
+                    logger.debug(f"   📍 Row {idx} is category: '{current_category}'")
 
                     # Initialize this category
                     if current_category not in category_data:
@@ -266,15 +267,15 @@ def process_sheet_data_structured(df_raw, sheet_name):
                 if has_valid_rule_data(row_data, column_mapping):
                     category_data[current_category]["data_rows"].append(
                         row_data)
-                    print(
+                    logger.debug(
                         f"   ✅ Added data to '{current_category}': {source_ip} → {destination_ip} ({service})")
                 else:
-                    print(
+                    logger.debug(
                         f"   ⚠️ Skipping row {idx} - doesn't contain valid rule data")
 
     # Handle case where no categories were detected but there is data
     if not category_data:
-        print(
+        logger.info(
             f"⚠️ No categories detected in sheet '{sheet_name}', checking for uncategorized data...")
         uncategorized_data = process_uncategorized_data(
             df_raw, header_row_idx, headers, column_mapping)
@@ -306,12 +307,6 @@ def process_uncategorized_data(df_raw, header_row_idx, headers, column_mapping):
         # Check if this is valid rule data
         if len(row_data) >= len(column_mapping) and has_valid_rule_data(row_data, column_mapping):
             data_rows.append(row_data)
-            source_ip = get_cell_value(
-                row_data, column_mapping.get('source_ip'))
-            destination_ip = get_cell_value(
-                row_data, column_mapping.get('destination_ip'))
-            print(
-                f"   ✅ Added uncategorized data: {source_ip} → {destination_ip}")
 
     return {
         "headers": headers,
@@ -371,17 +366,17 @@ def find_header_row(df_raw):
         if header_like_count >= 2:  # Reduced threshold to be more flexible
             original_headers = [str(cell).strip()
                                 for cell in row if pd.notna(cell)]
-            print(f"✅ Found header row at row {row_num}: {original_headers}")
+            logger.debug(f"✅ Found header row at row {row_num}: {original_headers}")
             return idx, original_headers
 
-    print("❌ No header row found, using fallback detection")
+    logger.warning("❌ No header row found, using fallback detection")
     return None, None
 
 
 def detect_column_mapping(headers, sheet_name):
     """Detect column mapping from header names"""
     mapping = {}
-    print(f"🔍 Detecting column mapping for sheet: {sheet_name}")
+    logger.debug(f"🔍 Detecting column mapping for sheet: {sheet_name}")
 
     for i, header in enumerate(headers):
         header_lower = header.lower()
@@ -437,7 +432,7 @@ def detect_column_mapping(headers, sheet_name):
     if 'description' not in mapping:
         mapping['description'] = 5  # Common position for description
 
-    print(f"🔍 Detected column mapping: {mapping}")
+    logger.debug(f"🔍 Detected column mapping: {mapping}")
     return mapping
 
 
@@ -449,12 +444,6 @@ def has_valid_rule_data(row_data, column_mapping):
     service = get_cell_value(row_data, column_mapping.get('service'))
     description = get_cell_value(row_data, column_mapping.get('description'))
 
-    # More flexible validation:
-    # - Allow rules with source IP + service
-    # - Allow rules with destination IP + service
-    # - Allow rules with both IPs
-    # - Allow rules with meaningful description + service
-
     has_source = source_ip and source_ip.strip() and source_ip.lower() not in [
         '', 'subnet']
     has_dest = destination_ip and destination_ip.strip(
@@ -464,11 +453,6 @@ def has_valid_rule_data(row_data, column_mapping):
     has_desc = description and description.strip(
     ) and description.lower() not in ['', 'nan']
 
-    # Valid combinations:
-    # 1. Source IP + Service
-    # 2. Destination IP + Service
-    # 3. Both IPs
-    # 4. Service + Meaningful description
     if has_service:
         if has_source or has_dest or (has_source and has_dest) or has_desc:
             return True
@@ -482,27 +466,22 @@ def looks_like_ip(value):
         return False
 
     value = str(value).strip()
-    print(f"🔍 IP CHECK: '{value}'")
 
     # Basic IP pattern - must be exact match
     ip_pattern = r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$'
     if re.match(ip_pattern, value):
-        print(f"   ✅ IP MATCH: {value}")
         return True
 
     # Subnet pattern - must be exact match
     subnet_pattern = r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/\d{1,2}$'
     if re.match(subnet_pattern, value):
-        print(f"   ✅ SUBNET MATCH: {value}")
         return True
 
     # Common IP-like values - exact matches only
     ip_like_values = ['subnet', 'any', 'all', '0.0.0.0']
     if value.lower() in ip_like_values:
-        print(f"   ✅ IP-LIKE MATCH: {value}")
         return True
 
-    print(f"   ❌ NOT IP: {value}")
     return False
 
 
@@ -512,7 +491,6 @@ def looks_like_service(value):
         return False
 
     value = str(value).strip().lower()
-    print(f"🔍 SERVICE CHECK: '{value}'")
 
     # Service patterns
     service_patterns = [
@@ -527,14 +505,11 @@ def looks_like_service(value):
 
     for pattern in service_patterns:
         if re.match(pattern, value):
-            print(f"   ✅ SERVICE MATCH: {value} matches {pattern}")
             return True, ""
 
     if value in service_names:
-        print(f"   ✅ SERVICE MATCH: {value} in service names")
         return True, ""
 
-    print(f"   ❌ NOT SERVICE: {value}")
     return False, ""
 
 
@@ -849,12 +824,12 @@ def sync_to_mysql(sheet_structures):
                             total_rules_added += 1
 
         db.session.commit()
-        print(
+        logger.info(
             f"✅ Sync complete: {total_rules_added} added, {total_rules_updated} updated")
 
     except Exception as e:
         db.session.rollback()
-        print(f"❌ Error syncing to MySQL: {e}")
+        logger.error("❌ Error syncing to MySQL", exc_info=True)
 
 
 def build_population_data(rule):

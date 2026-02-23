@@ -1,4 +1,5 @@
 '''API routes for acl requests, templates and admin actions'''
+import logging
 from flask import jsonify, request, Blueprint
 from datetime import datetime
 from ..main import validate_request_payload, validate_bulk_requests, validate_ip, validate_service, validate_description
@@ -6,6 +7,7 @@ from ..guards.roleguard import token_required
 from ..extensions import db
 from ..models import ACLRequest, FirewallRule, Templates
 
+logger = logging.getLogger(__name__)
 actempad_bp = Blueprint('actempad', __name__)
 
 
@@ -20,8 +22,8 @@ def get_acl_requests(current_user):
             "acl_requests": [request.to_json() for request in requests]
         })
     except Exception as e:
-        print(f"❌ Error fetching ACL requests: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        logger.error("❌ Error fetching ACL requests", exc_info=True)
+        return jsonify({"error": "Failed to fetch ACL requests"}), 500
 
 
 @actempad_bp.route('/create_acl_request', methods=['POST'])
@@ -72,8 +74,8 @@ def create_acl_request(current_user):
 
     except Exception as e:
         db.session.rollback()
-        print(f"❌ Error creating ACL request: {str(e)}")
-        return jsonify({"error": f"Failed to create request: {str(e)}"}), 400
+        logger.error("❌ Error creating ACL request", exc_info=True)
+        return jsonify({"error": "Failed to create ACL request"}), 400
 
 
 @actempad_bp.route('/api/v1/create_acl_request/bulk', methods=['POST'])
@@ -130,7 +132,8 @@ def create_bulk_acl_requests(current_user):
         }), 201
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': f'Failed to create your ACL requests. Contact Support: {str(e)}'}), 500
+        logger.error("❌ Error creating bulk ACL requests", exc_info=True)
+        return jsonify({'error': 'Failed to create your ACL requests. Contact Support'}), 500
 
 
 @actempad_bp.route('/api/v1/validate-requests', methods=['POST'])
@@ -217,7 +220,8 @@ def validate_requests(current_user):
         }), 200 if not has_errors else 400
 
     except Exception as e:
-        return jsonify({'error': f'Validation failed: {str(e)}'}), 500
+        logger.error("❌ Error validating requests", exc_info=True)
+        return jsonify({'error': 'Validation failed'}), 500
 
 
 @actempad_bp.route('/acl_requests/<int:request_id>', methods=['GET'])
@@ -239,7 +243,8 @@ def get_acl_request_detail(current_user, request_id):
         }), 200
 
     except Exception as e:
-        return jsonify({'error': f'Failed to fetch request: {str(e)}'}), 500
+        logger.error("❌ Error fetching ACL request details", exc_info=True)
+        return jsonify({'error': 'Failed to fetch ACL request details'}), 500
 
 
 @actempad_bp.route('/acl_requests/<int:request_id>', methods=['PUT'])
@@ -281,7 +286,8 @@ def update_acl_request_status(current_user, request_id):
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': f'Failed to update request: {str(e)}'}), 500
+        logger.error("❌ Error updating ACL request", exc_info=True)
+        return jsonify({'error': 'Failed to update ACL request'}), 500
 
 
 # Add comment to ACL request
@@ -317,7 +323,8 @@ def add_comment_to_request(current_user, request_id):
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': f'Failed to add comment: {str(e)}'}), 500
+        logger.error("❌ Error adding comment to ACL request", exc_info=True)
+        return jsonify({'error': 'Failed to add comment to ACL request'}), 500
 
 
 @actempad_bp.route('/api/v1/templates/<int:template_id>/use', methods=['POST'])
@@ -362,7 +369,8 @@ def create_request_from_template(current_user, template_id):
         }), 201
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': f'Failed to create acl request {str(e)}'}), 500
+        logger.error("❌ Error creating ACL request from template", exc_info=True)
+        return jsonify({'error': 'Failed to create ACL request from template'}), 500
 
 
 @actempad_bp.route('/api/v1/templates/systemtypes', methods=['GET'])
@@ -378,7 +386,8 @@ def get_template_system_types(current_user):
             'system_types': [st[0] for st in system_types]
         }), 200
     except Exception as e:
-        return jsonify({'error': f'failed to fetch system types: {str(e)}'}), 500
+        logger.error("❌ Error fetching system types", exc_info=True)
+        return jsonify({'error': 'failed to fetch system types'}), 500
 
 
 @actempad_bp.route('/api/v1/templates/grouped', methods=['GET'])
@@ -412,7 +421,8 @@ def get_grouped_templates(current_user):
         }), 200
 
     except Exception as e:
-        return jsonify({'error': f'Failed to fetch templates: {str(e)}'}), 500
+        logger.error("❌ Error fetching grouped templates", exc_info=True)
+        return jsonify({'error': 'Failed to fetch grouped templates'}), 500
 
 
 @actempad_bp.route('/api/v1/templates', methods=['GET'])
@@ -452,7 +462,8 @@ def get_template(current_user):
             'templates': [template.to_json() for template in templates]
         }), 200
     except Exception as e:
-        return jsonify({'error': f"Error occured during template retreival. {str(e)}"}), 500
+        logger.error("❌ Error fetching templates", exc_info=True)
+        return jsonify({'error': 'Error occurred during template retrieval' }), 500
 
 
 @actempad_bp.route('/api/v1/templates/<int:id>', methods=['GET'])
@@ -471,7 +482,8 @@ def get_template_by_id(current_user, id):
         }), 200
 
     except Exception as e:
-        return jsonify({'error': f"Failed to fetch template. {str(e)}"}), 500
+        logger.error("❌ Error fetching template by ID", exc_info=True)
+        return jsonify({'error': 'Failed to fetch template'}), 500
 
 
 # Get template dropdown options from database
@@ -524,7 +536,8 @@ def get_template_dropdown_options(current_user):
         }), 200
 
     except Exception as e:
-        return jsonify({'error': f'Failed to fetch dropdown options: {str(e)}'}), 500
+        logger.error("❌ Error fetching template dropdown options", exc_info=True)
+        return jsonify({'error': 'Failed to fetch dropdown options'}), 500
 
 
 @actempad_bp.route('/api/v1/admin/templates/bulk', methods=['POST'])
@@ -573,6 +586,7 @@ def bulk_create_templates(current_user):
                 created_templates.append(new_template)
 
             except Exception as e:
+                logger.warning(f"Error processing template at index {idx}: {str(e)}", exc_info=True)
                 errors.append({
                     'index': idx,
                     'error': str(e)
@@ -590,7 +604,8 @@ def bulk_create_templates(current_user):
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': f'Bulk template creation failed. {str(e)}'}), 500
+        logger.error("❌ Error in bulk template creation", exc_info=True)
+        return jsonify({'error': 'Bulk template creation failed'}), 500
 
 
 @actempad_bp.route('/api/v1/user/template', methods=['POST'])
@@ -662,7 +677,8 @@ def create_template(current_user):
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': f'Failed to create template: {str(e)}'}), 500
+        logger.error("❌ Error creating template", exc_info=True)
+        return jsonify({'error': 'Failed to create template'}), 500
 
 
 @actempad_bp.route('/api/v1/admin/templates/multi-rule', methods=['POST'])
@@ -747,7 +763,8 @@ def create_multi_rule_template(current_user):
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': f'Failed to create multi-rule template: {str(e)}'}), 500
+        logger.error("❌ Error creating multi-rule template", exc_info=True)
+        return jsonify({'error': 'Failed to create multi-rule template'}), 500
 
 
 @actempad_bp.route('/api/v1/admin/templates/<id>', methods=['PUT'])
@@ -823,7 +840,8 @@ def update_template(current_user, id):
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': f'Failed to update template: {str(e)}'}), 500
+        logger.error(f"❌ Error updating template {id}", exc_info=True)
+        return jsonify({'error': 'Failed to update template'}), 500
 
 
 @actempad_bp.route('/api/v1/admin/templates/<id>', methods=['DELETE'])
@@ -851,7 +869,8 @@ def delete_template(current_user, id):
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': f'Failed to delete template: {str(e)}'}), 500
+        logger.error(f"❌ Error deleting template {id}", exc_info=True)
+        return jsonify({'error': 'Failed to delete template'}), 500
 
 
 @actempad_bp.route('/api/v1/templates/<int:id>/permanent', methods=['DELETE'])
@@ -874,4 +893,5 @@ def delete_template_permanently(current_user, id):
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': f'Failed to delete template: {str(e)}'}), 500
+        logger.error(f"❌ Error permanently deleting template {id}", exc_info=True)
+        return jsonify({'error': 'Failed to delete template'}), 500

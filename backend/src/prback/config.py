@@ -7,10 +7,13 @@ different deployment environments (development, staging, production).
 '''
 import os
 import click
+import logging
 from werkzeug.security import generate_password_hash
 from flask import Flask
 from .extensions import db, migrate, cors
 
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 # Google Sheets Configuration
 GOOGLE_SHEETS = {
     'MAIN_SHEET': os.getenv('GOOGLE_SHEETS_URL', ''),
@@ -81,7 +84,7 @@ def create_app():
             new_user = User(name=name, username=username, email=email, password=hashed_password, role='admin')
             db.session.add(new_user)
             db.session.commit()
-            print(f"Admin user '{username}' created successfully")
+            logger.info(f"Admin user '{username}' created successfully")
             
     
     @app.before_request
@@ -89,7 +92,7 @@ def create_app():
         """Create tables if they don't exist"""
         if not hasattr(app, 'has started'):
             from .main import start_background_sync
-            print("🚀 Starting Flask application...")
+            logger.info("🚀 Starting Flask application...")
             with app.app_context():
                 db.create_all()
             start_background_sync(app)

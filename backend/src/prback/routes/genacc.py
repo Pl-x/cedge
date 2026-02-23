@@ -4,6 +4,7 @@ and health checks. It implements JWT-based authentication and role-based access 
 to secure the API endpoints. Additionally, it provides endpoints for manual synchronization with Google Sheets and
 auto-population of form fields based on existing firewall rules.
 '''
+import logging
 from flask import Blueprint, jsonify, request
 from flask import current_app as app
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -13,6 +14,9 @@ from ..guards.roleguard import token_required
 from ..extensions import db
 from ..models import FirewallRule, User
 
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 genacc_bp = Blueprint('genacc', __name__)
 
@@ -77,7 +81,8 @@ def signup():
         }), 201
     except Exception as e:
         db.session.rollback()
-        return jsonify({'Error': f'Internal server error {e}'})
+        logger.error("Error during signup", exc_info=True)
+        return jsonify({'error': "An error occurred during signup"}), 500
 
 
 @genacc_bp.route('/api/v1/auth/login', methods=['POST'])
@@ -111,6 +116,7 @@ def login():
         )
 
         if not token:
+            logger.error(f"Failed to generate authentication token for user: {user.username}")
             return jsonify({'error': 'Failed to generate authentication token'}), 500
         return jsonify({
             'message': 'User logged in successfully',
@@ -125,7 +131,8 @@ def login():
         }), 200
 
     except Exception as e:
-        return jsonify({'error': f'An error occured during login {e}'}), 500
+        logger.error("Error during login", exc_info=True)
+        return jsonify({'error': "An error occurred during login"}), 500
 
 
 @genacc_bp.route('/api/v1/rbac/role', methods=['GET'])
@@ -145,7 +152,8 @@ def get_role(current_user):
             }
         }), 200
     except Exception as e:
-        return jsonify({'error': f'failed to fetch role {str(e)}'}), 500
+        logger.error("Error fetching user role", exc_info=True)
+        return jsonify({'error': "Failed to fetch user role"}), 500
 
 
 @genacc_bp.route('/api/force-sync', methods=['POST'])
@@ -153,11 +161,12 @@ def get_role(current_user):
 def force_sync(current_user):
     """Force a manual sync from Google Sheets"""
     try:
-        print("🔄 Manual sync requested...")
-        automated_sync()
+        logger.info(f"🔄 Manual sync requested...by {current_user.username}")
+        automated_sync(app)
         return jsonify({"message": "Sync completed successfully"})
     except Exception as e:
-        return jsonify({"error": f"Sync failed: {str(e)}"}), 500
+        logger.error("Error during manual sync", exc_info=True)
+        return jsonify({"error": "Sync failed"}), 500
 
 
 @genacc_bp.route('/api/auto-populate', methods=['POST'])
@@ -216,7 +225,8 @@ def auto_populate_fields():
             return jsonify({"error": "No Source ip or destination ip has been provided"}), 200
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        logger.error("Error in auto_populate_fields", exc_info=True)
+        return jsonify({"error": "An error occurred while auto-populating fields"}), 500
 
 
 @genacc_bp.route('/api/v1/help', methods=['GET'])
@@ -274,14 +284,15 @@ def get_help(current_user):
             'export': f'{"Admins" if current_user.role == "admin" else "You"} can download Excel reports of ACL requests',
 
             'contact_support': {
-                'email': 'support@example.com',
+                'email': 'support@techmoguls.org',
                 'note': 'For technical issues or questions about request status'
             }
         }
 
         return jsonify(help_info), 200
     except Exception as e:
-        return jsonify({'error': f"Failed to retrieve help: {str(e)}"}), 500
+        logger.error("Error fetching help information", exc_info=True)
+        return jsonify({'error': "Failed to retrieve help information"}), 500
 
 
 @genacc_bp.route('/health', methods=['GET'])
@@ -296,7 +307,8 @@ def health_check(current_user):
             'database': 'connected'
         }), 200
     except Exception as e:
+        logger.error(f"Database connection failed during health check", exc_info=True)
         return jsonify({
             'status': 'unhealthy',
-            'error': str(e)
+            'error': "Database connection failed"
         }), 500

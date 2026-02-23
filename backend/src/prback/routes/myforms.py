@@ -1,9 +1,12 @@
 '''API routes for mysql-options and form options'''
+import logging
 from flask import jsonify, Blueprint
 from ..main import looks_like_ip, last_sync_time
 from ..models import FirewallRule
 from flask import current_app as app
 
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 myforms_bp = Blueprint('myforms', __name__)
 
 
@@ -153,5 +156,5 @@ def get_mysql_options():
             })
 
     except Exception as e:
-        print(f"❌ Error in get_mysql_options: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        logger.error("❌ Error in get_mysql_options", exc_info=True)
+        return jsonify({"error": "An error occurred while fetching database options"}), 500

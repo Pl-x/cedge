@@ -4,6 +4,7 @@ based on the status and system type of ACL requests, allowing users to easily vi
 The generated Excel files include conditional formatting to highlight different statuses (e.g., Pending, Approved, Rejected) a
 nd system types (e.g., "Others" for manual entries).
 '''
+import logging
 from flask import Blueprint
 from io import BytesIO
 from datetime import datetime
@@ -12,6 +13,9 @@ from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from flask import jsonify, request, send_file
 from ..models import ACLRequest
 from ..guards.roleguard import token_required
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 exls_bp = Blueprint('exls', __name__)
 
@@ -257,8 +261,8 @@ def generate_submission_xlsx(current_user):
             mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
     except Exception as e:
-        print(f"Error generating submission Excel: {e}")
-        return jsonify({'error': f'Failed to generate Excel report: {str(e)}'}), 500
+        logger.error("Error generating submission Excel", exc_info=True)
+        return jsonify({'error': 'Failed to generate Excel report'}), 500
 
 
 @exls_bp.route('/api/v1/generate-xlsx', methods=['GET'])
@@ -405,5 +409,5 @@ def generate_xlsx_enhanced(current_user):
             mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
     except Exception as e:
-        print(f"Error generating Excel: {e}")
-        return jsonify({'error': f'Failed to generate Excel report: {str(e)}'}), 500
+        logger.error("Error generating Excel", exc_info=True)
+        return jsonify({'error': 'Failed to generate Excel report'}), 500
