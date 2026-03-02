@@ -109,21 +109,21 @@ const TemplatesPage = () => {
         if (!confirm(`Delete template "${templateName}"?`)) return;
         try {
             const t = templates.find(t => t.template_name === templateName);
-            if(t) {
+            if (t) {
                 await fetchWithAuth(`${API_BASE_URL}/api/v1/templates/${t.id}/permanent`, { method: 'DELETE' });
                 fetchTemplates();
             }
-        } catch(e) { setError('Delete failed'); }
+        } catch (e) { setError('Delete failed'); }
     };
 
     const useTemplate = async (id) => {
         try {
             const res = await fetchWithAuth(`${API_BASE_URL}/api/v1/templates/${id}/use`, { method: 'POST' });
-            if(res.ok) {
+            if (res.ok) {
                 setSuccess("Request created from template!");
                 setTimeout(() => setSuccess(''), 3000);
             }
-        } catch(e) { setError('Failed to use template'); }
+        } catch (e) { setError('Failed to use template'); }
     };
 
     const renderRuleInput = (idx, rule, field, label, placeholder) => {
@@ -156,24 +156,24 @@ const TemplatesPage = () => {
         if (isDropdownField && options.length > 0) {
             return (
                 <div className="field">
-                <label>{label}</label>
-                <div className="combo-input">
-                <input
-                list={`${field}-${idx}`}
-                required
-                value={rule[field]}
-                onChange={e => updateRule(idx, field, e.target.value)}
-                placeholder={`Select or type ${placeholder}`}
-                />
-                <datalist id={`${field}-${idx}`}>
-                {options.map((opt, i) => (
-                    <option key={i} value={opt} />
-                ))}
-                </datalist>
-                </div>
-                <small style={{color: 'var(--text-light)', fontSize: '0.75rem'}}>
-                Select from dropdown or type custom value
-                </small>
+                    <label>{label}</label>
+                    <div className="combo-input">
+                        <input
+                            list={`${field}-${idx}`}
+                            required
+                            value={rule[field]}
+                            onChange={e => updateRule(idx, field, e.target.value)}
+                            placeholder={`Select or type ${placeholder}`}
+                        />
+                        <datalist id={`${field}-${idx}`}>
+                            {options.map((opt, i) => (
+                                <option key={i} value={opt} />
+                            ))}
+                        </datalist>
+                    </div>
+                    <small style={{ color: 'var(--text-light)', fontSize: '0.75rem' }}>
+                        Select from dropdown or type custom value
+                    </small>
                 </div>
             );
         }
@@ -181,222 +181,222 @@ const TemplatesPage = () => {
         // Fallback to regular input
         return (
             <div className="field">
-            <label>{label}</label>
-            <input
-            required
-            value={rule[field]}
-            onChange={e => updateRule(idx, field, e.target.value)}
-            placeholder={placeholder}
-            />
+                <label>{label}</label>
+                <input
+                    required
+                    value={rule[field]}
+                    onChange={e => updateRule(idx, field, e.target.value)}
+                    placeholder={placeholder}
+                />
             </div>
         );
     };
 
     return (
         <div className={`page-container ${isDarkMode ? 'dark-mode' : 'light-mode'}`}>
-        {/* Header */}
-        <div className="header">
-        <div>
-        <h1>Template Library</h1>
-        <p>Pre-configured firewall rule sets</p>
-        </div>
-        <div style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
-        <button className="theme-toggle" onClick={toggleTheme}>
-        {isDarkMode ? '☀️ Light' : '🌙 Dark'}
-        </button>
-        {userRole === 'admin' && (
-            <button className="btn-primary" onClick={() => setShowCreateModal(true)}>
-            + New Template
-            </button>
-        )}
-        </div>
-        </div>
-
-        {/* Alerts */}
-        {success && <div className="toast success">{success}</div>}
-        {error && <div className="toast error">{error}</div>}
-
-        {/* Grid */}
-        <div className="grid">
-        {loading ? <div className="loading">Loading...</div> : templates.map(t => (
-            <div key={t.id} className="card">
-            <div className="card-header">
-            <h3>{t.template_name}</h3>
-            <span className="badge">{t.rule_count || 1} Rules</span>
-            </div>
-            <div className="card-body">
-            {t.rules && t.rules.slice(0,3).map((r, i) => (
-                <div key={i} className="rule-row">
-                <div className="dot"></div>
-                <span>{r.system_type} • {r.service}</span>
+            {/* Header */}
+            <div className="header">
+                <div>
+                    <h1>Template Library</h1>
+                    <p>Pre-configured firewall rule sets</p>
                 </div>
-            ))}
-            {t.rules?.length > 3 && <div className="more">+{t.rules.length - 3} more</div>}
-            </div>
-            <div className="card-footer">
-            <span className="author">By {t.created_by}</span>
-            <div className="actions">
-            <button className="btn-text" onClick={() => {setSelectedTemplate(t); setShowModal(true)}}>View</button>
-            <button className="btn-use-small" onClick={() => useTemplate(t.id)}>Use</button>
-            {userRole === 'admin' &&
-                <button className="btn-text danger" onClick={() => deleteTemplate(t.template_name)}>Delete</button>
-            }
-            </div>
-            </div>
-            </div>
-        ))}
-        </div>
-
-        {/* Create Modal */}
-        {showCreateModal && (
-            <div className="modal-overlay">
-            <div className="modal-large">
-            <div className="modal-top">
-            <h2>Create Multi-Rule Template</h2>
-            <button className="close" onClick={() => setShowCreateModal(false)}>×</button>
-            </div>
-            <form onSubmit={handleCreateTemplate} className="create-form">
-            <div className="form-section">
-            <label>Template Name</label>
-            <input
-            className="main-input"
-            required
-            value={templateName}
-            onChange={e => setTemplateName(e.target.value)}
-            placeholder="e.g. Windows Web Server Bundle"
-            />
-            <small style={{color: 'var(--text-light)', marginTop: '0.5rem', display: 'block'}}>
-            Give your template a descriptive name
-            </small>
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                    <button className="theme-toggle" onClick={toggleTheme}>
+                        {isDarkMode ? '☀️ Light' : '🌙 Dark'}
+                    </button>
+                    {userRole === 'admin' && (
+                        <button className="btn-primary" onClick={() => setShowCreateModal(true)}>
+                            + New Template
+                        </button>
+                    )}
+                </div>
             </div>
 
-            {loadingOptions && (
-                <div style={{padding: '1rem', textAlign: 'center', color: 'var(--text-light)'}}>
-                Loading dropdown options...
+            {/* Alerts */}
+            {success && <div className="toast success">{success}</div>}
+            {error && <div className="toast error">{error}</div>}
+
+            {/* Grid */}
+            <div className="grid">
+                {loading ? <div className="loading">Loading...</div> : templates.map(t => (
+                    <div key={t.id} className="card">
+                        <div className="card-header">
+                            <h3>{t.template_name}</h3>
+                            <span className="badge">{t.rule_count || 1} Rules</span>
+                        </div>
+                        <div className="card-body">
+                            {t.rules && t.rules.slice(0, 3).map((r, i) => (
+                                <div key={i} className="rule-row">
+                                    <div className="dot"></div>
+                                    <span>{r.system_type} • {r.service}</span>
+                                </div>
+                            ))}
+                            {t.rules?.length > 3 && <div className="more">+{t.rules.length - 3} more</div>}
+                        </div>
+                        <div className="card-footer">
+                            <span className="author">By {t.created_by}</span>
+                            <div className="actions">
+                                <button className="btn-text" onClick={() => { setSelectedTemplate(t); setShowModal(true) }}>View</button>
+                                <button className="btn-use-small" onClick={() => useTemplate(t.id)}>Use</button>
+                                {userRole === 'admin' &&
+                                    <button className="btn-text danger" onClick={() => deleteTemplate(t.template_name)}>Delete</button>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            {/* Create Modal */}
+            {showCreateModal && (
+                <div className="modal-overlay">
+                    <div className="modal-large">
+                        <div className="modal-top">
+                            <h2>Create Multi-Rule Template</h2>
+                            <button className="close" onClick={() => setShowCreateModal(false)}>×</button>
+                        </div>
+                        <form onSubmit={handleCreateTemplate} className="create-form">
+                            <div className="form-section">
+                                <label>Template Name</label>
+                                <input
+                                    className="main-input"
+                                    required
+                                    value={templateName}
+                                    onChange={e => setTemplateName(e.target.value)}
+                                    placeholder="e.g. Windows Web Server Bundle"
+                                />
+                                <small style={{ color: 'var(--text-light)', marginTop: '0.5rem', display: 'block' }}>
+                                    Give your template a descriptive name
+                                </small>
+                            </div>
+
+                            {loadingOptions && (
+                                <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-light)' }}>
+                                    Loading dropdown options...
+                                </div>
+                            )}
+
+                            <div className="rules-container">
+                                {rules.map((rule, idx) => (
+                                    <div key={idx} className="rule-card">
+                                        <div className="rule-header">
+                                            <h4>Rule #{idx + 1}</h4>
+                                            {rules.length > 1 && (
+                                                <button type="button" className="btn-remove" onClick={() => removeRule(idx)}>
+                                                    Remove
+                                                </button>
+                                            )}
+                                        </div>
+                                        <div className="rule-grid">
+                                            {renderRuleInput(idx, rule, 'system_type', 'System Type', 'system type')}
+                                            {renderRuleInput(idx, rule, 'category', 'Category', 'category')}
+                                            {renderRuleInput(idx, rule, 'source_ip', 'Source IP', '10.0.0.1')}
+
+                                            <div className="field">
+                                                <label>Source Host (Optional)</label>
+                                                <input
+                                                    value={rule.source_host}
+                                                    onChange={e => updateRule(idx, 'source_host', e.target.value)}
+                                                    placeholder="e.g. web-server-01"
+                                                />
+                                            </div>
+
+                                            {renderRuleInput(idx, rule, 'destination_ip', 'Destination IP', '192.168.1.5')}
+
+                                            <div className="field">
+                                                <label>Destination Host (Optional)</label>
+                                                <input
+                                                    value={rule.destination_host}
+                                                    onChange={e => updateRule(idx, 'destination_host', e.target.value)}
+                                                    placeholder="e.g. db-server-01"
+                                                />
+                                            </div>
+
+                                            <div className="field full">
+                                                <label>Service / Port</label>
+                                                {renderRuleInput(idx, rule, 'service', 'Service', 'tcp/443, http')}
+                                            </div>
+
+                                            <div className="field full">
+                                                <label>Description</label>
+                                                <textarea
+                                                    value={rule.description}
+                                                    onChange={e => updateRule(idx, 'description', e.target.value)}
+                                                    placeholder="Describe the purpose of this rule..."
+                                                    rows={3}
+                                                    style={{
+                                                        width: '100%',
+                                                        padding: '8px',
+                                                        border: '1px solid var(--border)',
+                                                        borderRadius: '4px',
+                                                        background: 'var(--input-bg)',
+                                                        color: 'var(--text-main)',
+                                                        fontFamily: 'inherit',
+                                                        resize: 'vertical'
+                                                    }}
+                                                />
+                                            </div>
+
+                                            <div className="field">
+                                                <label>Action</label>
+                                                <select
+                                                    value={rule.action}
+                                                    onChange={e => updateRule(idx, 'action', e.target.value)}
+                                                    style={{
+                                                        padding: '8px',
+                                                        border: '1px solid var(--border)',
+                                                        borderRadius: '4px',
+                                                        background: 'var(--input-bg)',
+                                                        color: 'var(--text-main)'
+                                                    }}
+                                                >
+                                                    <option value="allow">Allow</option>
+                                                    <option value="deny">Deny</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                                <button type="button" className="btn-add" onClick={addRule}>
+                                    + Add Another Rule
+                                </button>
+                            </div>
+
+                            <div className="modal-actions">
+                                <button type="button" onClick={() => setShowCreateModal(false)}>
+                                    Cancel
+                                </button>
+                                <button type="submit" className="btn-primary" disabled={loadingOptions}>
+                                    {loadingOptions ? 'Loading...' : 'Create Template'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+            {/* Detail Modal */}
+            {showModal && selectedTemplate && (
+                <div className="modal-overlay" onClick={() => setShowModal(false)}>
+                    <div className="modal-panel" onClick={e => e.stopPropagation()}>
+                        <h3>{selectedTemplate.template_name}</h3>
+                        <div className="detail-list">
+                            {selectedTemplate.rules?.map((r, i) => (
+                                <div key={i} className="detail-item">
+                                    <div className="tag">{r.action}</div>
+                                    <div>
+                                        <strong>{r.system_type}</strong>: {r.source_ip} ➜ {r.destination_ip}
+                                        <br />
+                                        <small className="mono">{r.service}</small>
+                                        {r.description && <div className="desc">{r.description}</div>}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
                 </div>
             )}
 
-            <div className="rules-container">
-            {rules.map((rule, idx) => (
-                <div key={idx} className="rule-card">
-                <div className="rule-header">
-                <h4>Rule #{idx + 1}</h4>
-                {rules.length > 1 && (
-                    <button type="button" className="btn-remove" onClick={() => removeRule(idx)}>
-                    Remove
-                    </button>
-                )}
-                </div>
-                <div className="rule-grid">
-                {renderRuleInput(idx, rule, 'system_type', 'System Type', 'system type')}
-                {renderRuleInput(idx, rule, 'category', 'Category', 'category')}
-                {renderRuleInput(idx, rule, 'source_ip', 'Source IP', '10.0.0.1')}
-
-                <div className="field">
-                <label>Source Host (Optional)</label>
-                <input
-                value={rule.source_host}
-                onChange={e => updateRule(idx, 'source_host', e.target.value)}
-                placeholder="e.g. web-server-01"
-                />
-                </div>
-
-                {renderRuleInput(idx, rule, 'destination_ip', 'Destination IP', '192.168.1.5')}
-
-                <div className="field">
-                <label>Destination Host (Optional)</label>
-                <input
-                value={rule.destination_host}
-                onChange={e => updateRule(idx, 'destination_host', e.target.value)}
-                placeholder="e.g. db-server-01"
-                />
-                </div>
-
-                <div className="field full">
-                <label>Service / Port</label>
-                {renderRuleInput(idx, rule, 'service', 'Service', 'tcp/443, http')}
-                </div>
-
-                <div className="field full">
-                <label>Description</label>
-                <textarea
-                value={rule.description}
-                onChange={e => updateRule(idx, 'description', e.target.value)}
-                placeholder="Describe the purpose of this rule..."
-                rows={3}
-                style={{
-                    width: '100%',
-                    padding: '8px',
-                    border: '1px solid var(--border)',
-                                       borderRadius: '4px',
-                                       background: 'var(--input-bg)',
-                                       color: 'var(--text-main)',
-                                       fontFamily: 'inherit',
-                                       resize: 'vertical'
-                }}
-                />
-                </div>
-
-                <div className="field">
-                <label>Action</label>
-                <select
-                value={rule.action}
-                onChange={e => updateRule(idx, 'action', e.target.value)}
-                style={{
-                    padding: '8px',
-                    border: '1px solid var(--border)',
-                                       borderRadius: '4px',
-                                       background: 'var(--input-bg)',
-                                       color: 'var(--text-main)'
-                }}
-                >
-                <option value="allow">Allow</option>
-                <option value="deny">Deny</option>
-                </select>
-                </div>
-                </div>
-                </div>
-            ))}
-            <button type="button" className="btn-add" onClick={addRule}>
-            + Add Another Rule
-            </button>
-            </div>
-
-            <div className="modal-actions">
-            <button type="button" onClick={() => setShowCreateModal(false)}>
-            Cancel
-            </button>
-            <button type="submit" className="btn-primary" disabled={loadingOptions}>
-            {loadingOptions ? 'Loading...' : 'Create Template'}
-            </button>
-            </div>
-            </form>
-            </div>
-            </div>
-        )}
-        {/* Detail Modal */}
-        {showModal && selectedTemplate && (
-            <div className="modal-overlay" onClick={() => setShowModal(false)}>
-            <div className="modal-panel" onClick={e => e.stopPropagation()}>
-            <h3>{selectedTemplate.template_name}</h3>
-            <div className="detail-list">
-            {selectedTemplate.rules?.map((r, i) => (
-                <div key={i} className="detail-item">
-                <div className="tag">{r.action}</div>
-                <div>
-                <strong>{r.system_type}</strong>: {r.source_ip} ➜ {r.destination_ip}
-                <br/>
-                <small className="mono">{r.service}</small>
-                {r.description && <div className="desc">{r.description}</div>}
-                </div>
-                </div>
-            ))}
-            </div>
-            </div>
-            </div>
-        )}
-
-        <style jsx="true">{`
+            <style jsx="true">{`
             /* THEME VARIABLES */
             .light-mode {
                 --bg-main: #f4f6f9;
@@ -524,7 +524,7 @@ const TemplatesPage = () => {
             .toast.error { background: #dc3545; }
             @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
             `}</style>
-            </div>
+        </div>
     );
 };
 export default TemplatesPage;

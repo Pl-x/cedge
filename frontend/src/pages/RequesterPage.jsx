@@ -37,6 +37,12 @@ function RequesterPage() {
   const [helpContent, setHelpContent] = useState(null);
   const [loadingHelp, setLoadingHelp] = useState(false);
   const [validationProgress, setValidationProgress] = useState('');
+  const [showBilling, setShowBilling] = useState(false);
+  
+  // NEW: Theme State for consistency with ReviewerPage
+  const [isDarkMode, setIsDarkMode] = useState(true);
+  const toggleTheme = () => setIsDarkMode(!isDarkMode);
+
   const fetchTemplates = async () => {
     setLoadingTemplates(true);
     try {
@@ -113,6 +119,23 @@ function RequesterPage() {
     }
   }, [showHelp]);
 
+  const handleUpgrade = (planName, amount) => {
+    let username = "UnknownUser"
+    const userStr = localStorage.getItem("user");
+    if (userStr){
+      try {
+        const userObj = JSON.parse(userStr)
+        username = userObj.username || userObj.name || 'Uknown User'
+      } catch (error) {
+        console.error("AN error occured")
+      }
+    }
+    const ref = `${planName}_UPGRADE_${username}`
+    const checkoutUrl = `https://unb.allan7ycrx.org/api/v1/pay?amount=${amount}&phone_number=&ref=${ref}&return_url=${encodeURIComponent(window.location.href)}`
+
+    window.location.href = checkoutUrl
+  };
+
   // Download Excel file
   const handleDownloadExcel = async () => {
     try {
@@ -143,12 +166,6 @@ function RequesterPage() {
   };
 
   const handleDownloadSubmissionExcel = async (submittedRequests) => {
-    /**
-     * Downloads an Excel file for the current submission only
-     * Called automatically after successful bulk submission
-     *
-     * @param {Array} submittedRequests - Array of request objects that were just submitted
-     */
     try {
       const token = localStorage.getItem('token');
 
@@ -293,6 +310,7 @@ function RequesterPage() {
       console.error("❌ Error in backend autopopulation:", error);
     }
   };
+  
   // Get filtered categories for current system_type
   const getFilteredCategories = (index) => {
     const system_type = requests[index].system_type;
@@ -371,7 +389,6 @@ function RequesterPage() {
     return enhancedIPs;
   };
 
-  // Get all unique values for combobox suggestions
   const getComboboxOptions = (field, index) => {
     if (isOthersCategory(index)) return [];
 
@@ -390,7 +407,7 @@ function RequesterPage() {
         return [];
     }
   };
-  //  Handle field blur - validate on blur
+
   const handleFieldBlur = (index, field) => {
     // Skip validation for "Others" category on certain fields
     if (isOthersCategory(index)) {
@@ -421,23 +438,17 @@ function RequesterPage() {
     }
 
     if (field === 'system_type' && oldValue !== value) {
-
-      // Clear validation errors for this row
       const newErrors = [...validationErrors];
       newErrors[index] = {};
       setValidationErrors(newErrors);
     }
 
-    // Reset IP fields when category changes (for non-Others system_type)
     if (field === 'category' && !isOthersCategory(index) && oldValue !== value) {
-
-      // Clear validation errors for IP fields
       const newErrors = [...validationErrors];
       newErrors[index] = {};
       setValidationErrors(newErrors);
     }
 
-    // Handle combobox selection (when user selects from dropdown)
     if ((field === 'sourceIP' || field === 'destinationIP') && !isOthersCategory(index)) {
       const ipType = field === 'sourceIP' ? 'source' : 'destination';
       const ipArray = ipType === 'source' ? getFilteredSourceIPs(index) : getFilteredDestinationIPs(index);
@@ -472,7 +483,6 @@ function RequesterPage() {
           description: true
         };
 
-        // Clear validation errors for auto-populated fields
         const newErrors = [...validationErrors];
         newErrors[index] = {};
         setValidationErrors(newErrors);
@@ -499,7 +509,6 @@ function RequesterPage() {
       }
     }
 
-    // Auto-population logic for Source IP or Destination IP selection (ID-based)
     if ((field === 'sourceIPId' || field === 'destinationIPId') && value && !isOthersCategory(index)) {
       const ipType = field === 'sourceIPId' ? 'source' : 'destination';
 
@@ -544,7 +553,6 @@ function RequesterPage() {
           description: true
         };
 
-        // Clear validation errors for auto-populated fields
         const newErrors = [...validationErrors];
         newErrors[index] = {};
         setValidationErrors(newErrors);
@@ -562,7 +570,6 @@ function RequesterPage() {
     setAutoPopulatedFields(newAutoPopulatedFields);
   };
 
-  // Add request with validation state
   const addRequest = () => {
     setRequests([...requests, { ...initialRequest }]);
     setAutoPopulatedFields([...autoPopulatedFields, {
@@ -573,11 +580,10 @@ function RequesterPage() {
       service: false,
       description: false
     }]);
-    // Add empty validation error object for new row
     setValidationErrors([...validationErrors, {}]);
     setTouchedFields([...touchedFields, {}]);
   };
-  // Remove request with validation state
+
   const removeRequest = (index) => {
     if (requests.length > 1) {
       const newRequests = requests.filter((_, i) => i !== index);
@@ -595,12 +601,10 @@ function RequesterPage() {
   const validateRequestsBackend = async () => {
     setIsValidating(true);
     setValidationProgress('Checking request data...');
-    setValidationErrors([]); // Clear previous errors
+    setValidationErrors([]); 
 
     try {
       const token = localStorage.getItem('token');
-
-      // Simulate progress updates for better UX
       setTimeout(() => setValidationProgress('Validating IP addresses...'), 300);
       setTimeout(() => setValidationProgress('Validating services...'), 600);
       setTimeout(() => setValidationProgress('Validating descriptions...'), 900);
@@ -617,9 +621,7 @@ function RequesterPage() {
       const data = await response.json();
 
       if (!response.ok || !data.valid) {
-        // Validation failed - show errors
         setValidationProgress('❌ Validation failed - errors found');
-        // Convert array of validation results to indexed object
         const errorsByIndex = {};
         if (data.validation_results && Array.isArray(data.validation_results)) {
           data.validation_results.forEach(result => {
@@ -629,20 +631,13 @@ function RequesterPage() {
           });
         }
 
-        // Set validation errors as array matching requests array
         const errorsArray = requests.map((_, idx) => errorsByIndex[idx] || {});
         setValidationErrors(errorsArray);
-
-        // Show modal with all errors
         setShowValidationModal(true);
-
-        // Clear progress after a delay
         setTimeout(() => setValidationProgress(''), 2000);
-
         return false;
       }
 
-      // All valid
       setValidationProgress('✅ All validations passed!');
       setTimeout(() => setValidationProgress(''), 1500);
       return true;
@@ -657,14 +652,12 @@ function RequesterPage() {
   };
 
 
-  // Handle bulk submit with validation
 const handleBulkSubmit = async (e) => {
   e.preventDefault();
   setSubmitError("");
   setSubmitSuccess("");
   setValidationProgress('Starting validation...');
 
-  // Basic field checks
   try {
     for (let i = 0; i < requests.length; i++) {
       const req = requests[i];
@@ -688,7 +681,6 @@ const handleBulkSubmit = async (e) => {
       }
     }
 
-    // Perform backend validation with visible progress
     const isValid = await validateRequestsBackend();
 
     if (!isValid) {
@@ -696,14 +688,12 @@ const handleBulkSubmit = async (e) => {
       return;
     }
 
-    // Validation passed - proceed with submission
     setLoading(true);
     setValidationProgress('Submitting requests...');
 
     const token = localStorage.getItem('token');
     const submittedRequests = [];
 
-    // Submit all requests and collect their responses and parsed JSON
     const submissionPromises = requests.map((request) =>
       fetch(`${API_BASE_URL}/create_acl_request`, {
         method: "POST",
@@ -733,7 +723,6 @@ const handleBulkSubmit = async (e) => {
 
     const results = await Promise.all(submissionPromises);
 
-    // Build submittedRequests array using returned data and original request info
     results.forEach((responseData, i) => {
       submittedRequests.push({
         id: responseData.request_id || 'N/A',
@@ -751,7 +740,6 @@ const handleBulkSubmit = async (e) => {
       });
     });
 
-    // Success!
     setRequests([{ ...initialRequest }]);
     setAutoPopulatedFields([{
       sourceIP: false,
@@ -779,75 +767,70 @@ const handleBulkSubmit = async (e) => {
   }
 };
 
-
 if (loading && requests.length === 1 && !requests[0].system_type) {
-  return <div className="loading">Loading form options...</div>;
+  return (
+    <div className={`loading-screen ${isDarkMode ? 'dark-mode' : 'light-mode'}`}>
+      <div className="spinner"></div>Loading options...
+    </div>
+  );
 }
 
 return (
-  <div className="acl-table-container">
-    <div className="acl-table-header">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+  <div className={`requester-container ${isDarkMode ? 'dark-mode' : 'light-mode'}`}>
+    
+    {/* PREMIUM TOP BAR */}
+    <div className="top-bar">
         <div>
           <h1>📋 ACL Request Automation</h1>
-          <p>Create multiple ACL requests in a table format</p>
+          <p className="subtitle">Create and manage bulk network access rules</p>
         </div>
-        <nav style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+        <div className="actions">
+          {/* THEME TOGGLE */}
+          <button className="theme-toggle" onClick={toggleTheme} title="Toggle Theme">
+            {isDarkMode ? '☀️ Light' : '🌙 Dark'}
+          </button>
+
+          {/* UPGRADE BUTTON */}
+          <button
+            type="button"
+            onClick={() => setShowBilling(true)}
+            className="btn-upgrade"
+          >
+            <span className="lightning">⚡</span> Upgrade Plan
+          </button>
+
+          {/* HELP BUTTON */}
           <button
             type="button"
             onClick={() => setShowHelp(true)}
-            style={{
-              backgroundColor: '#17a2b8',
-              color: 'white',
-              border: 'none',
-              padding: '8px 16px',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '14px',
-              fontWeight: '500',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '5px'
-            }}
+            className="btn-secondary"
             title="Help & Instructions"
           >
             ❓ Help
           </button>
+          
           <LogoutButton />
-        </nav>
-      </div>
+        </div>
     </div>
 
-    {submitSuccess && (
-      <div className="success-message">
-        {submitSuccess}
-      </div>
-    )}
-
-    {submitError && (
-      <div className="error-message">
-        {submitError}
-      </div>
-    )}
-
-    {error && (
-      <div className={error.includes('✅') ? 'success-message' : 'error-message'}>
-        {error}
-      </div>
-    )}
+    {/* ALERTS */}
+    {submitSuccess && <div className="alert success">{submitSuccess} <button onClick={() => setSubmitSuccess("")}>×</button></div>}
+    {submitError && <div className="alert error">{submitError} <button onClick={() => setSubmitError("")}>×</button></div>}
+    {error && <div className={`alert ${error.includes('✅') ? 'success' : 'error'}`}>{error} <button onClick={() => setError("")}>×</button></div>}
 
     {validationProgress && (
       <div className="validation-progress-container">
         <div className="validation-progress">
-          <div className="spinner"></div>
+          <div className="spinner-small"></div>
           <span>{validationProgress}</span>
         </div>
       </div>
     )}
 
+    {/* DATA TABLE FORM */}
     <form onSubmit={handleBulkSubmit}>
-      <div className="acl-table-wrapper">
-        <table className="acl-table">
+      <div className="table-wrapper">
+        <table className="modern-table">
           <thead>
             <tr>
               <th className="required-field">System Type</th>
@@ -857,9 +840,9 @@ return (
               <th className="required-field">Destination IP</th>
               <th>Destination Host</th>
               <th className="required-field">Service</th>
-              <th style={{ minWidth: '200px' }} >Description</th>
+              <th style={{ minWidth: '200px' }}>Description</th>
               <th className="required-field" style={{ minWidth: '120px' }}>Action</th>
-              <th>Remove</th>
+              <th className="text-right">Remove</th>
             </tr>
           </thead>
           <tbody>
@@ -870,191 +853,168 @@ return (
             return (
               <tr key={index} className={hasErrors ? 'error-row' : ''}>
 
-              {/* COLUMN 1: System Type (Merged Display + Input) */}
+              {/* COLUMN 1: System Type */}
               <td>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-              <select
-              value={request.system_type}
-              onChange={(e) => updateRequest(index, 'system_type', e.target.value)}
-              required
-              >
-              <option value="">Select System Type</option>
-              {options.system_types.map((st, idx) => (
-                <option key={idx} value={st}>{st}</option>
-              ))}
-              </select>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                  <select
+                    className={`modern-select ${rowErrors.system_type ? 'input-error' : ''}`}
+                    value={request.system_type}
+                    onChange={(e) => updateRequest(index, 'system_type', e.target.value)}
+                    required
+                  >
+                    <option value="">Select System Type</option>
+                    {options.system_types.map((st, idx) => (
+                      <option key={idx} value={st}>{st}</option>
+                    ))}
+                  </select>
 
-              {/* Visual Badges (Optional - kept for context) */}
-              <div style={{ display: 'flex', gap: '5px' }}>
-              {isTemplateCategory(index) && (
-                <span style={{ fontSize: '0.7rem', backgroundColor: '#E2EFDA', padding: '2px 6px', borderRadius: '4px' }}>
-                📋 Template
-                </span>
-              )}
-              {isOthersCategory(index) && (
-                <span style={{ fontSize: '0.7rem', backgroundColor: '#FFE699', padding: '2px 6px', borderRadius: '4px' }}>
-                ✏️ Manual
-                </span>
-              )}
-              </div>
-              </div>
-              {rowErrors.system_type && (
-                <div className="field-error">{rowErrors.system_type}</div>
-              )}
+                  <div style={{ display: 'flex', gap: '5px' }}>
+                    {isTemplateCategory(index) && (
+                      <span className="status-pill approved">📋 Template</span>
+                    )}
+                    {isOthersCategory(index) && (
+                      <span className="status-pill pending">✏️ Manual</span>
+                    )}
+                  </div>
+                </div>
+                {rowErrors.system_type && <div className="field-error">{rowErrors.system_type}</div>}
               </td>
 
-              {/* COLUMN 2: Category (Kept only one instance) */}
+              {/* COLUMN 2: Category */}
               <td>
               {isOthersCategory(index) || isTemplateCategory(index) ? (
                 <input
-                type="text"
-                value={request.category}
-                onChange={(e) => updateRequest(index, 'category', e.target.value)}
-                placeholder={isTemplateCategory(index) ? "From template" : "Enter category"}
-                disabled={isTemplateCategory(index)}
-                style={{
-                  backgroundColor: isTemplateCategory(index) ? '#E2EFDA' : 'white',
-                                                                       fontWeight: isTemplateCategory(index) ? 'bold' : 'normal'
-                }}
+                  type="text"
+                  className="modern-input"
+                  value={request.category}
+                  onChange={(e) => updateRequest(index, 'category', e.target.value)}
+                  placeholder={isTemplateCategory(index) ? "From template" : "Enter category"}
+                  disabled={isTemplateCategory(index)}
+                  style={{ opacity: isTemplateCategory(index) ? 0.7 : 1 }}
                 />
               ) : (
                 <select
-                value={request.category}
-                onChange={(e) => updateRequest(index, 'category', e.target.value)}
-                disabled={!request.system_type}
-                required
+                  className={`modern-select ${rowErrors.category ? 'input-error' : ''}`}
+                  value={request.category}
+                  onChange={(e) => updateRequest(index, 'category', e.target.value)}
+                  disabled={!request.system_type}
+                  required
                 >
-                <option value="">Select Category</option>
-                {getFilteredCategories(index).map((cat, idx) => (
-                  <option key={idx} value={cat.value}>{cat.display}</option>
-                ))}
+                  <option value="">Select Category</option>
+                  {getFilteredCategories(index).map((cat, idx) => (
+                    <option key={idx} value={cat.value}>{cat.display}</option>
+                  ))}
                 </select>
               )}
-              {rowErrors.category && (
-                <div className="field-error">{rowErrors.category}</div>
-              )}
+              {rowErrors.category && <div className="field-error">{rowErrors.category}</div>}
               </td>
-
-              {/* DELETED: The duplicate System Type <select> td was here */}
-              {/* DELETED: The duplicate Category <input/select> td was here */}
 
               {/* COLUMN 3: Source IP */}
               <td>
-              <input
-              list={`sourceIP-options-${index}`}
-              value={request.sourceIP}
-              onChange={(e) => updateRequest(index, 'sourceIP', e.target.value)}
-              placeholder="Source IP"
-              className={rowErrors.sourceIP ? 'input-error' : ''}
-              required
-              />
-              <datalist id={`sourceIP-options-${index}`}>
-              {getFilteredSourceIPs(index).map((ip, idx) => (
-                <option key={idx} value={ip.value} />
-              ))}
-              </datalist>
-              {rowErrors.sourceIP && (
-                <div className="field-error">{rowErrors.sourceIP}</div>
-              )}
+                <input
+                  className={`modern-input ${rowErrors.sourceIP ? 'input-error' : ''}`}
+                  list={`sourceIP-options-${index}`}
+                  value={request.sourceIP}
+                  onChange={(e) => updateRequest(index, 'sourceIP', e.target.value)}
+                  placeholder="e.g. 192.168.1.1"
+                  required
+                />
+                <datalist id={`sourceIP-options-${index}`}>
+                  {getFilteredSourceIPs(index).map((ip, idx) => <option key={idx} value={ip.value} />)}
+                </datalist>
+                {rowErrors.sourceIP && <div className="field-error">{rowErrors.sourceIP}</div>}
               </td>
 
               {/* COLUMN 4: Source Host */}
               <td>
-              <input
-              type="text"
-              value={request.sourceHost}
-              onChange={(e) => updateRequest(index, 'sourceHost', e.target.value)}
-              placeholder="Source Host"
-              />
+                <input
+                  type="text"
+                  className="modern-input"
+                  value={request.sourceHost}
+                  onChange={(e) => updateRequest(index, 'sourceHost', e.target.value)}
+                  placeholder="Optional"
+                />
               </td>
 
               {/* COLUMN 5: Destination IP */}
               <td>
-              <input
-              list={`destinationIP-options-${index}`}
-              value={request.destinationIP}
-              onChange={(e) => updateRequest(index, 'destinationIP', e.target.value)}
-              placeholder="Destination IP"
-              className={rowErrors.destinationIP ? 'input-error' : ''}
-              required
-              />
-              <datalist id={`destinationIP-options-${index}`}>
-              {getFilteredDestinationIPs(index).map((ip, idx) => (
-                <option key={idx} value={ip.value} />
-              ))}
-              </datalist>
-              {rowErrors.destinationIP && (
-                <div className="field-error">{rowErrors.destinationIP}</div>
-              )}
+                <input
+                  className={`modern-input ${rowErrors.destinationIP ? 'input-error' : ''}`}
+                  list={`destinationIP-options-${index}`}
+                  value={request.destinationIP}
+                  onChange={(e) => updateRequest(index, 'destinationIP', e.target.value)}
+                  placeholder="e.g. 10.0.0.5"
+                  required
+                />
+                <datalist id={`destinationIP-options-${index}`}>
+                  {getFilteredDestinationIPs(index).map((ip, idx) => <option key={idx} value={ip.value} />)}
+                </datalist>
+                {rowErrors.destinationIP && <div className="field-error">{rowErrors.destinationIP}</div>}
               </td>
 
               {/* COLUMN 6: Destination Host */}
               <td>
-              <input
-              type="text"
-              value={request.destinationHost}
-              onChange={(e) => updateRequest(index, 'destinationHost', e.target.value)}
-              placeholder="Destination Host"
-              />
+                <input
+                  type="text"
+                  className="modern-input"
+                  value={request.destinationHost}
+                  onChange={(e) => updateRequest(index, 'destinationHost', e.target.value)}
+                  placeholder="Optional"
+                />
               </td>
 
               {/* COLUMN 7: Service */}
               <td>
-              <input
-              type="text"
-              value={request.service}
-              onChange={(e) => updateRequest(index, 'service', e.target.value)}
-              placeholder="Service"
-              className={rowErrors.service ? 'input-error' : ''}
-              required
-              />
-              {rowErrors.service && (
-                <div className="field-error">{rowErrors.service}</div>
-              )}
+                <input
+                  type="text"
+                  className={`modern-input ${rowErrors.service ? 'input-error' : ''}`}
+                  value={request.service}
+                  onChange={(e) => updateRequest(index, 'service', e.target.value)}
+                  placeholder="e.g. tcp/443"
+                  required
+                />
+                {rowErrors.service && <div className="field-error">{rowErrors.service}</div>}
               </td>
 
               {/* COLUMN 8: Description */}
               <td>
-              <textarea
-              value={request.description}
-              onChange={(e) => updateRequest(index, 'description', e.target.value)}
-              placeholder="Description"
-              className={rowErrors.description ? 'input-error' : ''}
-              style={{ minWidth: '180px', minHeight: '40px' }}
-              />
-              {rowErrors.description && (
-                <div className="field-error">{rowErrors.description}</div>
-              )}
+                <textarea
+                  className={`modern-input ${rowErrors.description ? 'input-error' : ''}`}
+                  value={request.description}
+                  onChange={(e) => updateRequest(index, 'description', e.target.value)}
+                  placeholder="Business justification..."
+                  style={{ minWidth: '180px', minHeight: '40px', resize: 'vertical' }}
+                />
+                {rowErrors.description && <div className="field-error">{rowErrors.description}</div>}
               </td>
 
               {/* COLUMN 9: Action */}
               <td>
-              <select
-              value={request.action}
-              onChange={(e) => updateRequest(index, 'action', e.target.value)}
-              required
-              style={{ minWidth: '100px' }}
-              >
-              <option value="">Select</option>
-              <option value="allow">Allow</option>
-              <option value="deny">Deny</option>
-              </select>
-              {rowErrors.action && (
-                <div className="field-error">{rowErrors.action}</div>
-              )}
+                <select
+                  className={`modern-select ${rowErrors.action ? 'input-error' : ''}`}
+                  value={request.action}
+                  onChange={(e) => updateRequest(index, 'action', e.target.value)}
+                  required
+                >
+                  <option value="">Select</option>
+                  <option value="allow">Allow</option>
+                  <option value="deny">Deny</option>
+                </select>
+                {rowErrors.action && <div className="field-error">{rowErrors.action}</div>}
               </td>
 
               {/* COLUMN 10: Remove Button */}
-              <td>
-              {requests.length > 1 && (
-                <button
-                type="button"
-                onClick={() => removeRequest(index)}
-                className="btn-remove-row"
-                >
-                🗑️
-                </button>
-              )}
+              <td className="text-right">
+                {requests.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => removeRequest(index)}
+                    className="btn-icon danger"
+                    title="Remove row"
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                  </button>
+                )}
               </td>
               </tr>
             );
@@ -1062,85 +1022,75 @@ return (
           </tbody>
         </table>
       </div>
-      {/* Form Actions */}
-      <div className="acl-form-actions">
-        <button
-          type="button"
-          onClick={addRequest}
-          className="btn-add-request"
-        >
-          <span>+</span> Add Another Request
-        </button>
-        <button
-          type="button"
-          onClick={() => setShowTemplates(true)}
-        >
-          <span>+</span> 📋 Use Template
-        </button>
 
-        <div className="acl-submit-section">
-          <div className="acl-request-count">
-            Total Requests: {requests.length}
-          </div>
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-            <button
-              type="button"
-              onClick={handleDownloadExcel}
-              style={{
-                backgroundColor: '#28a745',
-                color: 'white',
-                border: 'none',
-                padding: '10px 20px',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: '500'
-              }}
-              title="Download Excel report of all requests"
-            >
-              📥 Download Excel
-            </button>
-            <button
-              type="submit"
-              disabled={loading || isValidating}
-              className="btn-submit-requests"
-            >
-              {loading ? "Submitting..." : `Submit ${requests.length} Request(s)`}
-            </button>
-          </div>
+      {/* FORM ACTIONS FOOTER */}
+      <div className="form-footer-actions">
+        <div className="left-actions">
+          <button type="button" onClick={addRequest} className="btn-secondary">
+            + Add Another Request
+          </button>
+          <button type="button" onClick={() => setShowTemplates(true)} className="btn-secondary">
+            📋 Use Template
+          </button>
+        </div>
+
+        <div className="right-actions">
+          <span className="count-badge">Total Requests: {requests.length}</span>
+          <button
+            type="button"
+            onClick={handleDownloadExcel}
+            className="btn-secondary outline"
+            title="Download Excel report"
+          >
+            📥 Export CSV
+          </button>
+          <button
+            type="submit"
+            disabled={loading || isValidating}
+            className="btn-success lg"
+          >
+            {loading ? "Submitting..." : `Submit ${requests.length} Request(s)`}
+          </button>
         </div>
       </div>
     </form>
 
-    {/* Template Selection Modal */}
+    {/* MODALS */}
+
+    {/* 1. Template Selection Modal */}
     {showTemplates && (
-      <div className="modal-overlay" onClick={() => setShowTemplates(false)}>
-        <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-backdrop" onClick={() => setShowTemplates(false)}>
+        <div className="modal-panel" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px' }}>
           <div className="modal-header">
             <h2>📋 Select Template</h2>
             <button className="close-btn" onClick={() => setShowTemplates(false)}>×</button>
           </div>
           <div className="modal-body">
             {loadingTemplates ? (
-              <p>Loading templates...</p>
+              <div className="loading-state"><div className="spinner-small"></div> Loading templates...</div>
             ) : templates.length === 0 ? (
-              <p>No templates available</p>
+              <div className="empty-state">No templates available. Admins can create them in the Template Library.</div>
             ) : (
               <div className="templates-list">
                 {templates.map(template => (
-                  <div key={template.template_name} className="template-item">
-                    <h4>{template.template_name}</h4>
-                    <p><strong>Rules:</strong> {template.rule_count}</p>
-                    <div style={{ fontSize: '12px', color: '#666', marginBottom: '10px' }}>
+                  <div key={template.template_name} className="template-card">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div>
+                        <h4 className="template-title">{template.template_name}</h4>
+                        <span className="status-pill pending">{template.rule_count} rules</span>
+                      </div>
+                      <button onClick={() => loadTemplate(template)} className="btn-success sm">
+                        Use Template
+                      </button>
+                    </div>
+                    <div className="template-rules-preview">
                       {template.rules.map((rule, idx) => (
-                        <div key={idx}>
-                          {idx + 1}. {rule.system_type} - {rule.category} ({rule.service})
+                        <div key={idx} className="rule-preview-item">
+                          <span className="dot"></span>
+                          {rule.system_type} - {rule.category} <span className="code-pill">{rule.service}</span>
                         </div>
                       ))}
                     </div>
-                    <button onClick={() => loadTemplate(template)} className="btn-use-template">
-                      Use Template ({template.rule_count} rules)
-                    </button>
                   </div>
                 ))}
               </div>
@@ -1150,388 +1100,380 @@ return (
       </div>
     )}
 
-    {/* Validation Errors Modal */}
+    {/* 2. Validation Errors Modal */}
     {showValidationModal && validationErrors.some(e => Object.keys(e).length > 0) && (
-      <div className="modal-overlay" onClick={() => setShowValidationModal(false)}>
-        <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-backdrop" onClick={() => setShowValidationModal(false)}>
+        <div className="modal-panel" onClick={(e) => e.stopPropagation()}>
           <div className="modal-header">
             <h2>⚠️ Validation Errors</h2>
             <button className="close-btn" onClick={() => setShowValidationModal(false)}>×</button>
           </div>
           <div className="modal-body">
-            <p>Please fix the following errors before submitting:</p>
-            {validationErrors.map((errors, idx) => {
-              if (Object.keys(errors).length === 0) return null;
-              return (
-                <div key={idx} className="validation-error-item">
-                  <h4>Request #{idx + 1}:</h4>
-                  <ul>
-                    {Object.entries(errors).map(([field, error]) => (
-                      <li key={field}><strong>{field}:</strong> {error}</li>
-                    ))}
-                  </ul>
-                </div>
-              );
-            })}
+            <p style={{ marginBottom: '1.5rem' }}>Please fix the following errors before submitting:</p>
+            <div className="error-list-container">
+              {validationErrors.map((errors, idx) => {
+                if (Object.keys(errors).length === 0) return null;
+                return (
+                  <div key={idx} className="validation-error-item">
+                    <h4>Request #{idx + 1}:</h4>
+                    <ul>
+                      {Object.entries(errors).map(([field, error]) => (
+                        <li key={field}><strong>{field.toUpperCase()}:</strong> {error}</li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })}
+            </div>
           </div>
           <div className="modal-footer">
             <button onClick={() => setShowValidationModal(false)} className="btn-secondary">
-              Close and Fix Errors
+              Close & Fix Errors
             </button>
           </div>
         </div>
       </div>
     )}
 
-    {/* Help Modal */}
+    {/* 3. Billing & Upgrade Modal */}
+    {showBilling && (
+      <div className="modal-backdrop" onClick={() => setShowBilling(false)}>
+        <div className="modal-panel billing-panel" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '800px' }}>
+          <div className="modal-header" style={{ borderBottom: 'none', paddingBottom: '0' }}>
+            <div style={{ textAlign: 'center', width: '100%', marginTop: '1rem' }}>
+              <h2 style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🚀 Upgrade Your Workspace</h2>
+              <p className="modal-subtitle">You are currently on the <strong>Free Plan</strong> (50 requests/month).</p>
+            </div>
+            <button className="close-btn absolute-right" onClick={() => setShowBilling(false)}>×</button>
+          </div>
+          <div className="modal-body" style={{ padding: '2rem 3rem 3rem' }}>
+            <div className="pricing-grid">
+              
+              {/* PRO PLAN CARD */}
+              <div className="pricing-card pro">
+                <h3 className="plan-name">Pro Plan</h3>
+                <div className="plan-price">Ksh 1,500<span className="period">/mo</span></div>
+                <ul className="plan-features">
+                  <li><span className="check">✅</span> 200 ACL Requests / month</li>
+                  <li><span className="check">✅</span> Read-only Admin Privileges</li>
+                  <li><span className="check">✅</span> Priority Email Support</li>
+                </ul>
+                <button onClick={() => handleUpgrade('PRO', 1500)} className="btn-plan-action">
+                  Upgrade to Pro
+                </button>
+              </div>
+
+              {/* VIP PLAN CARD */}
+              <div className="pricing-card vip">
+                <div className="popular-badge">MOST POPULAR</div>
+                <h3 className="plan-name">VIP Plan</h3>
+                <div className="plan-price">Ksh 5,000<span className="period">/mo</span></div>
+                <ul className="plan-features">
+                  <li><span className="check">🔥</span> 1000 ACL Requests / month</li>
+                  <li><span className="check">🔥</span> Read/Write Admin Privileges</li>
+                  <li><span className="check">🔥</span> 24/7 Phone Support</li>
+                </ul>
+                <button onClick={() => handleUpgrade('VIP', 5000)} className="btn-plan-action primary">
+                  Upgrade to VIP
+                </button>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* 4. Help Modal */}
     {showHelp && (
-      <div className="modal-overlay" onClick={() => setShowHelp(false)}>
-        <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '800px', maxHeight: '90vh', overflowY: 'auto' }}>
+      <div className="modal-backdrop" onClick={() => setShowHelp(false)}>
+        <div className="modal-panel help-panel" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '800px', height: '85vh' }}>
           <div className="modal-header">
-            <h2>❓ Help & Instructions</h2>
+            <h2>❓ Documentation & Help</h2>
             <button className="close-btn" onClick={() => setShowHelp(false)}>×</button>
           </div>
           <div className="modal-body">
             {loadingHelp ? (
-              <p>Loading help information...</p>
+              <div className="loading-state"><div className="spinner-small"></div> Loading documentation...</div>
             ) : helpContent ? (
-              <div style={{ padding: '20px' }}>
-                <section style={{ marginBottom: '30px' }}>
+              <div className="doc-content">
+                <section>
                   <h3>📖 Overview</h3>
                   <p>{helpContent.overview}</p>
                 </section>
 
-                <section style={{ marginBottom: '30px' }}>
+                <section>
                   <h3>📝 How to Create a Request</h3>
-                  <ol style={{ paddingLeft: '20px' }}>
+                  <ol>
                     {helpContent.how_to_create_request?.steps?.map((step, idx) => (
-                      <li key={idx} style={{ marginBottom: '8px' }}>{step}</li>
+                      <li key={idx}>{step}</li>
                     ))}
                   </ol>
-                  <div style={{ marginTop: '15px', padding: '10px', backgroundColor: '#e7f3ff', borderRadius: '4px' }}>
+                  <div className="info-box tip">
                     <strong>💡 Tips:</strong>
-                    <ul style={{ marginTop: '8px', paddingLeft: '20px' }}>
-                      {helpContent.how_to_create_request?.tips?.map((tip, idx) => (
-                        <li key={idx} style={{ marginBottom: '5px' }}>{tip}</li>
-                      ))}
+                    <ul>
+                      {helpContent.how_to_create_request?.tips?.map((tip, idx) => <li key={idx}>{tip}</li>)}
                     </ul>
                   </div>
                 </section>
 
-                <section style={{ marginBottom: '30px' }}>
+                <section>
                   <h3>✅ Validation Rules</h3>
-                  <div style={{ padding: '10px', backgroundColor: '#fff3cd', borderRadius: '4px' }}>
+                  <div className="info-box warning">
                     <p><strong>IP Addresses:</strong> {helpContent.validation_rules?.ip_addresses}</p>
                     <p><strong>Services:</strong> {helpContent.validation_rules?.services}</p>
                     <p><strong>Description:</strong> {helpContent.validation_rules?.description}</p>
                   </div>
                 </section>
 
-                <section style={{ marginBottom: '30px' }}>
+                <section>
                   <h3>📋 Templates</h3>
                   <p><strong>Info:</strong> {helpContent.templates?.info}</p>
                   <p><strong>Usage:</strong> {helpContent.templates?.usage}</p>
                 </section>
-
-                <section style={{ marginBottom: '30px' }}>
-                  <h3>📊 Request Status</h3>
-                  <ul style={{ paddingLeft: '20px' }}>
-                    <li><strong>Pending:</strong> {helpContent.request_status?.pending}</li>
-                    <li><strong>Approved:</strong> {helpContent.request_status?.approved}</li>
-                    <li><strong>Rejected:</strong> {helpContent.request_status?.rejected}</li>
-                  </ul>
-                </section>
-
-                <section style={{ marginBottom: '30px' }}>
-                  <h3>👥 Role Permissions</h3>
-                  <ul style={{ paddingLeft: '20px' }}>
-                    <li><strong>User:</strong> {helpContent.role_permissions?.user}</li>
-                    <li><strong>Reviewer:</strong> {helpContent.role_permissions?.reviewer}</li>
-                    <li><strong>Admin:</strong> {helpContent.role_permissions?.admin}</li>
-                  </ul>
-                </section>
-
-                <section style={{ marginBottom: '30px' }}>
-                  <h3>📦 Bulk Operations</h3>
-                  <p>{helpContent.bulk_operations}</p>
-                </section>
-
-                <section style={{ marginBottom: '30px' }}>
-                  <h3>📥 Export</h3>
-                  <p>{helpContent.export}</p>
-                </section>
-
-                <section>
-                  <h3>📧 Contact Support</h3>
-                  <p><strong>Email:</strong> {helpContent.contact_support?.email}</p>
-                  <p><em>{helpContent.contact_support?.note}</em></p>
-                </section>
               </div>
             ) : (
-              <p>Failed to load help information</p>
+              <div className="empty-state">Failed to load help information</div>
             )}
           </div>
-          <div className="modal-footer" style={{ padding: '15px', borderTop: '1px solid #ddd', textAlign: 'right' }}>
-            <button
-              onClick={() => setShowHelp(false)}
-              style={{
-                backgroundColor: '#6c757d',
-                color: 'white',
-                border: 'none',
-                padding: '8px 16px',
-                borderRadius: '4px',
-                cursor: 'pointer'
-              }}
-            >
-              Close
-            </button>
+          <div className="modal-footer">
+            <button onClick={() => setShowHelp(false)} className="btn-secondary">Close Documentation</button>
           </div>
         </div>
       </div>
     )}
 
-    {/* Add CSS for validation styling */}
+    {/* SAAS PREMIUM CSS INJECTIONS */}
     <style jsx="true">{`
-    .input-error {
-      border: 2px solid #dc3545 !important;
-      background-color: #fff5f5 !important;
-    }
+      /* THEME VARIABLES (Matching ReviewerPage exactly) */
+      .light-mode {
+        --bg-main: #f8fafc;
+        --bg-card: #ffffff;
+        --text-main: #0f172a;
+        --text-light: #64748b;
+        --border: #e2e8f0;
+        --accent-bg: #f1f5f9;
+        --input-bg: #ffffff;
+        --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+        --focus-ring: rgba(99, 102, 241, 0.2);
+        --brand: #6366f1;
+        --error-bg: #fef2f2;
+        --error-border: #fca5a5;
+        --error-text: #ef4444;
+      }
 
-    .field-error-message {
-      color: #dc3545;
-      font-size: 11px;
-      margin-top: 2px;
-      position: absolute;
-      background: white;
-      padding: 2px 5px;
-      border-radius: 3px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-      z-index: 100;
-      max-width: 200px;
-    }
+      .dark-mode {
+        --bg-main: #0b0f19;
+        --bg-card: #111827;
+        --text-main: #f3f4f6;
+        --text-light: #9ca3af;
+        --border: #1f2937;
+        --accent-bg: #1f2937;
+        --input-bg: #0b0f19;
+        --shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+        --focus-ring: rgba(99, 102, 241, 0.4);
+        --brand: #818cf8;
+        --error-bg: rgba(239, 68, 68, 0.1);
+        --error-border: rgba(239, 68, 68, 0.3);
+        --error-text: #f87171;
+      }
 
-    .combobox-container {
-      position: relative;
-    }
+      /* GLOBAL */
+      .requester-container {
+        padding: 2.5rem;
+        background-color: var(--bg-main);
+        min-height: 100vh;
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        color: var(--text-main);
+        transition: all 0.3s ease;
+      }
 
-    .validation-error-row {
-      background-color: #fff5f5;
-    }
+      /* TOP BAR */
+      .top-bar {
+        display: flex; justify-content: space-between; align-items: flex-end;
+        margin-bottom: 2.5rem;
+      }
+      h1 { font-size: 2rem; font-weight: 800; margin: 0 0 0.25rem 0; letter-spacing: -0.02em; }
+      .subtitle { color: var(--text-light); margin: 0; font-size: 1rem; }
+      .actions { display: flex; gap: 1rem; align-items: center; }
 
-    .validation-errors-cell {
-      padding: 10px !important;
-    }
+      /* BUTTONS */
+      .theme-toggle {
+        background: transparent; color: var(--text-light);
+        border: 1px solid var(--border);
+        padding: 0.6rem 1rem; border-radius: 8px; cursor: pointer;
+        font-weight: 600; transition: all 0.2s;
+      }
+      .theme-toggle:hover { background: var(--accent-bg); color: var(--text-main); }
 
-    .validation-errors-container {
-      background-color: #f8d7da;
-      border: 1px solid #f5c6cb;
-      border-radius: 4px;
-      padding: 10px;
-      color: #721c24;
-    }
+      .btn-upgrade {
+        background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+        color: white; border: none; padding: 0.6rem 1.2rem; border-radius: 8px;
+        cursor: pointer; font-weight: 700; display: flex; align-items: center; gap: 6px;
+        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3); transition: transform 0.2s;
+      }
+      .btn-upgrade:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(99, 102, 241, 0.4); }
 
-    .validation-errors-container strong {
-      display: block;
-      margin-bottom: 8px;
-    }
+      .btn-secondary {
+        padding: 0.6rem 1.2rem; border-radius: 8px; font-weight: 600; cursor: pointer;
+        background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border); 
+        box-shadow: var(--shadow); transition: all 0.2s; font-size: 0.9rem; display: inline-flex; align-items: center; gap: 6px;
+      }
+      .btn-secondary:hover { border-color: var(--text-light); background: var(--accent-bg); }
+      .btn-secondary.outline { background: transparent; box-shadow: none; }
 
-    .validation-errors-container ul {
-      margin: 0;
-      padding-left: 20px;
-    }
+      .btn-success {
+        padding: 0.6rem 1.2rem; border-radius: 8px; font-weight: 600; cursor: pointer; border: none;
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; 
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2); transition: all 0.2s; font-size: 0.9rem;
+      }
+      .btn-success:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(16, 185, 129, 0.3); }
+      .btn-success.lg { padding: 0.8rem 1.5rem; font-size: 1rem; }
+      .btn-success.sm { padding: 0.4rem 0.8rem; font-size: 0.8rem; }
 
-    .validation-errors-container li {
-      margin: 5px 0;
-    }
+      .btn-icon {
+        background: transparent; border: 1px solid var(--border); padding: 8px; border-radius: 6px;
+        color: var(--text-light); cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center;
+      }
+      .btn-icon:hover { background: var(--accent-bg); color: var(--text-main); }
+      .btn-icon.danger:hover { background: var(--error-bg); color: var(--error-text); border-color: var(--error-border); }
 
-    .success-message {
-      background-color: #d4edda;
-      color: #155724;
-      padding: 15px;
-      border-radius: 4px;
-      margin-bottom: 20px;
-      border: 1px solid #c3e6cb;
-    }
+      /* ALERTS & PROGRESS */
+      .alert {
+        padding: 1rem 1.5rem; border-radius: 8px; margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center;
+        font-weight: 500; animation: slideIn 0.3s ease;
+      }
+      .alert button { background: none; border: none; font-size: 1.2rem; cursor: pointer; opacity: 0.5; color: inherit; }
+      .alert button:hover { opacity: 1; }
+      .alert.error { background: var(--error-bg); color: var(--error-text); border: 1px solid var(--error-border); }
+      .alert.success { background: rgba(16, 185, 129, 0.1); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.2); }
 
-    .error-message {
-      background-color: #f8d7da;
-      color: #721c24;
-      padding: 15px;
-      border-radius: 4px;
-      margin-bottom: 20px;
-      border: 1px solid #f5c6cb;
-    }
-    .modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0,0,0,0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
+      .validation-progress-container {
+        background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2);
+        border-radius: 8px; padding: 1rem 1.5rem; margin-bottom: 1.5rem; animation: slideIn 0.3s ease;
+      }
+      .validation-progress { display: flex; align-items: center; gap: 12px; color: #3b82f6; font-weight: 600; }
+      .spinner-small { width: 18px; height: 18px; border: 2px solid transparent; border-top-color: currentColor; border-radius: 50%; animation: spin 0.8s linear infinite; }
 
-.modal-content {
-  background: white;
-  color: #333;
-  border-radius: 8px;
-  max-width: 600px;
-  width: 90%;
-  max-height: 80vh;
-  overflow-y: auto;
-}
+      /* TABLE WRAPPER */
+      .table-wrapper {
+        background: var(--bg-card); border-radius: 12px; box-shadow: var(--shadow);
+        overflow-x: auto; border: 1px solid var(--border); margin-bottom: 1.5rem;
+      }
+      .modern-table { width: 100%; border-collapse: collapse; min-width: 1200px; }
+      .modern-table th {
+        background: var(--bg-main); padding: 1rem; text-align: left; font-size: 0.75rem; 
+        text-transform: uppercase; color: var(--text-light); font-weight: 700; letter-spacing: 0.05em;
+        border-bottom: 1px solid var(--border); white-space: nowrap;
+      }
+      .required-field::after { content: '*'; color: var(--error-text); margin-left: 4px; }
+      
+      .modern-table td { padding: 1rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+      .modern-table tr:last-child td { border-bottom: none; }
+      
+      .error-row td { background-color: rgba(239, 68, 68, 0.02); }
 
-.modal-header {
-  padding: 20px;
-  border-bottom: 1px solid #ddd;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
+      /* INPUTS & SELECTS */
+      .modern-input, .modern-select {
+        width: 100%; padding: 0.6rem 0.8rem; border: 1px solid var(--border); border-radius: 6px;
+        background: var(--input-bg); color: var(--text-main); font-size: 0.85rem; font-family: inherit;
+        transition: all 0.2s;
+      }
+      .modern-input:focus, .modern-select:focus {
+        outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px var(--focus-ring);
+      }
+      .modern-input:disabled, .modern-select:disabled { opacity: 0.6; cursor: not-allowed; }
+      
+      .input-error { border-color: var(--error-text) !important; background-color: var(--error-bg) !important; }
+      .field-error { color: var(--error-text); font-size: 0.75rem; margin-top: 6px; font-weight: 600; }
 
-.field-error {
-  color: #dc3545;
-  font-size: 0.75rem;
-  margin-top: 4px;
-  display: block;
-  font-weight: 500;
-}
+      /* PILLS */
+      .status-pill { padding: 4px 8px; border-radius: 20px; font-size: 0.7rem; font-weight: 700; display: inline-flex; align-items: center; border: 1px solid transparent; }
+      .status-pill.pending { background: rgba(245, 158, 11, 0.1); color: #d97706; border-color: rgba(245, 158, 11, 0.2); }
+      .status-pill.approved { background: rgba(16, 185, 129, 0.1); color: #059669; border-color: rgba(16, 185, 129, 0.2); }
+      .code-pill { background: var(--bg-main); padding: 2px 6px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; border: 1px solid var(--border); color: var(--text-light); }
 
-.validation-error-item {
-  background: #fff5f5;
-  border: 1px solid #fecaca;
-  border-radius: 6px;
-  padding: 12px;
-  margin-bottom: 12px;
-}
+      /* FOOTER ACTIONS */
+      .form-footer-actions {
+        display: flex; justify-content: space-between; align-items: center;
+        background: var(--bg-card); padding: 1.5rem; border-radius: 12px;
+        box-shadow: var(--shadow); border: 1px solid var(--border);
+      }
+      .left-actions, .right-actions { display: flex; gap: 1rem; align-items: center; }
+      .count-badge { background: var(--accent-bg); padding: 0.6rem 1rem; border-radius: 8px; font-size: 0.9rem; font-weight: 600; border: 1px solid var(--border); }
 
-.validation-error-item h4 {
-  color: #dc3545;
-  margin: 0 0 8px 0;
-  font-size: 0.95rem;
-}
+      /* MODALS */
+      .modal-backdrop {
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.4); backdrop-filter: blur(8px);
+        z-index: 1000; display: flex; justify-content: center; align-items: center; padding: 1rem;
+      }
+      .modal-panel {
+        background: var(--bg-card); width: 100%; max-height: 90vh;
+        border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        display: flex; flex-direction: column; animation: modalPop 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        color: var(--text-main); border: 1px solid var(--border); position: relative;
+      }
+      @keyframes modalPop { from { transform: scale(0.95) translateY(10px); opacity: 0; } to { transform: scale(1) translateY(0); opacity: 1; } }
 
-.validation-error-item ul {
-  margin: 0;
-  padding-left: 20px;
-}
+      .modal-header { padding: 1.5rem 2rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+      .modal-header h2 { margin: 0; font-size: 1.25rem; }
+      .close-btn { background: var(--accent-bg); border: none; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; cursor: pointer; color: var(--text-light); transition: all 0.2s; }
+      .close-btn:hover { background: var(--error-text); color: white; }
+      .absolute-right { position: absolute; top: 1.5rem; right: 1.5rem; }
 
-.validation-error-item li {
-  margin: 4px 0;
-  color: #721c24;
-}
+      .modal-body { padding: 2rem; overflow-y: auto; flex: 1; }
+      .modal-footer { padding: 1.5rem 2rem; border-top: 1px solid var(--border); background: var(--bg-main); border-radius: 0 0 16px 16px; display: flex; justify-content: flex-end; }
 
-.btn-secondary {
-  background: #6c757d;
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-weight: 500;
-}
+      /* TEMPLATES MODAL SPECIFICS */
+      .templates-list { display: flex; flex-direction: column; gap: 1rem; }
+      .template-card { background: var(--bg-main); border: 1px solid var(--border); padding: 1.25rem; border-radius: 12px; transition: transform 0.2s; }
+      .template-card:hover { transform: translateY(-2px); border-color: var(--brand); }
+      .template-title { margin: 0 0 0.5rem 0; font-size: 1.1rem; }
+      .template-rules-preview { margin-top: 1rem; font-size: 0.85rem; color: var(--text-light); background: var(--bg-card); padding: 1rem; border-radius: 8px; border: 1px solid var(--border); }
+      .rule-preview-item { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+      .rule-preview-item .dot { width: 6px; height: 6px; background: var(--brand); border-radius: 50%; }
+      .rule-preview-item:last-child { margin-bottom: 0; }
 
-.btn-secondary:hover {
-  background: #5a6268;
-}
+      /* VALIDATION MODAL SPECIFICS */
+      .error-list-container { display: flex; flex-direction: column; gap: 1rem; }
+      .validation-error-item { background: var(--error-bg); border: 1px solid var(--error-border); border-radius: 8px; padding: 1.25rem; }
+      .validation-error-item h4 { color: var(--error-text); margin: 0 0 0.75rem 0; }
+      .validation-error-item ul { margin: 0; padding-left: 1.5rem; color: var(--text-main); font-size: 0.9rem; }
+      .validation-error-item li { margin-bottom: 4px; }
 
-.modal-footer {
-  padding: 15px;
-  border-top: 1px solid #ddd;
-  text-align: right;
-}
+      /* BILLING MODAL SPECIFICS */
+      .pricing-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
+      .pricing-card { background: var(--bg-card); border: 2px solid var(--border); border-radius: 16px; padding: 2.5rem 2rem; text-align: center; position: relative; transition: all 0.2s; }
+      .pricing-card.pro:hover { border-color: var(--text-light); }
+      .pricing-card.vip { border-color: var(--brand); box-shadow: 0 20px 25px -5px rgba(99, 102, 241, 0.1); }
+      .popular-badge { position: absolute; top: -14px; left: 50%; transform: translateX(-50%); background: var(--brand); color: white; padding: 6px 16px; border-radius: 20px; font-size: 0.75rem; font-weight: 800; letter-spacing: 0.05em; }
+      .plan-name { font-size: 1.5rem; margin: 0 0 1rem 0; color: var(--text-main); }
+      .plan-price { font-size: 3rem; font-weight: 900; color: var(--text-main); margin-bottom: 2rem; }
+      .plan-price .period { font-size: 1rem; color: var(--text-light); font-weight: 500; }
+      .pricing-card.vip .plan-price { color: var(--brand); }
+      .plan-features { list-style: none; padding: 0; margin: 0 0 2.5rem 0; text-align: left; color: var(--text-main); font-size: 0.95rem; line-height: 2.5; }
+      .check { margin-right: 12px; }
+      .btn-plan-action { width: 100%; padding: 1rem; background: var(--accent-bg); color: var(--text-main); border: none; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 1rem; transition: background 0.2s; }
+      .btn-plan-action:hover { background: var(--border); }
+      .btn-plan-action.primary { background: var(--brand); color: white; }
+      .btn-plan-action.primary:hover { filter: brightness(1.1); }
 
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 28px;
-  cursor: pointer;
-}
+      /* HELP MODAL SPECIFICS */
+      .doc-content section { margin-bottom: 2.5rem; line-height: 1.6; }
+      .doc-content h3 { font-size: 1.25rem; margin: 0 0 1rem 0; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
+      .doc-content ol, .doc-content ul { padding-left: 1.5rem; margin: 0; }
+      .doc-content li { margin-bottom: 0.5rem; }
+      .info-box { padding: 1rem; border-radius: 8px; margin-top: 1rem; font-size: 0.9rem; }
+      .info-box.tip { background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); }
+      .info-box.warning { background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.2); }
 
-.modal-body {
-  padding: 20px;
-}
-
-.templates-list {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-}
-
-.template-item {
-  border: 1px solid #ddd;
-  padding: 15px;
-  border-radius: 4px;
-}
-
-.template-item h4 {
-  margin: 0 0 10px 0;
-}
-
-.btn-use-template {
-  margin-top: 10px;
-  padding: 8px 16px;
-  background: #28a745;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-}
-.validation-progress-container {
-  background: #e7f3ff;
-  border: 1px solid #90c9f9;
-  border-radius: 6px;
-  padding: 15px;
-  margin-bottom: 20px;
-  animation: slideDown 0.3s ease-out;
-}
-
-.validation-progress {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  color: #0056b3;
-  font-weight: 500;
-}
-
-.spinner {
-  width: 20px;
-  height: 20px;
-  border: 3px solid #90c9f9;
-  border-top-color: #0056b3;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.error-row {
-  background-color: #fff5f5 !important;
-  animation: shake 0.5s;
-}
-
-@keyframes shake {
-  0%, 100% { transform: translateX(0); }
-  25% { transform: translateX(-5px); }
-  75% { transform: translateX(5px); }
-}
-  `}</style>
+      .loading-state, .empty-state { text-align: center; padding: 3rem; color: var(--text-light); display: flex; flex-direction: column; align-items: center; gap: 1rem; }
+      .loading-screen { display: flex; flex-direction: column; gap: 1rem; height: 100vh; justify-content: center; align-items: center; background: var(--bg-main); color: var(--text-main); font-weight: 600; }
+      .spinner { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--brand); border-radius: 50%; animation: spin 1s linear infinite; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      @keyframes slideIn { from { transform: translateY(-10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    `}</style>
   </div>
 );
 }

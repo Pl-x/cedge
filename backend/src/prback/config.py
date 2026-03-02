@@ -38,7 +38,7 @@ def create_app():
     app.config['JWT_EXPIRATION_HOURS'] = 24
     # MySQL Database configuration
     app.config['SQLALCHEMY_DATABASE_URI'] = \
-        f"mysql+mysqlconnector://{MYSQL_CONFIG['user']}:{MYSQL_CONFIG['password']}@{MYSQL_CONFIG['host']}:{MYSQL_CONFIG['port']}/{MYSQL_CONFIG['database']}"
+        f"mysql+mysqlconnector://{MYSQL_CONFIG['user']}:{MYSQL_CONFIG['password']}@{MYSQL_CONFIG['host']}:{MYSQL_CONFIG['port']}/{MYSQL_CONFIG['database']}?ssl_verify_cert=true&ssl_verify_identity=true"
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
         'pool_pre_ping': True,
@@ -48,14 +48,13 @@ def create_app():
     }
     cors.init_app(app, resources={
         r"/*": {
-            "origins": ["http://localhost:", "http://localhost:80", "http://localhost:5173"],
+            "origins": ["http://localhost:", "http://localhost:80", "http://localhost:5173", "https://gateway.allan7ycrx.org"],
             "methods": ["POST", "GET", "PUT", "DELETE", "OPTIONS"],
             "allow_headers": ["Content-Type", "Authorization"]
         }
     })
     db.init_app(app)
     migrate.init_app(app, db)
-    cors.init_app(app)
 
     from .routes.actempad import actempad_bp
     from .routes.exls import exls_bp

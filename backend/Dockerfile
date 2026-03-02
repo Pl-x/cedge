@@ -20,4 +20,4 @@ COPY . .
 
 EXPOSE 5000
 
-CMD ["uv", "run", "gunicorn", "-b", "0.0.0.0:5000", "run:app"]
+CMD ["uv", "run", "gunicorn", "--access-logfile", "-", "-b", "0.0.0.0:5000", "run:app"]
