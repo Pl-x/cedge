@@ -13,7 +13,7 @@ dependencies = [
     "python-dotenv>=0.20.0",
     "pyjwt>=2.10.1",
     "pandas",
-    "gunicorn==21.2.0",
+    "gunicorn==22.0.0",
 ]
 
 [tool.setuptools]
