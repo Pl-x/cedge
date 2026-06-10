@@ -11,7 +11,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from ..guards.jwtguard import generate_token
 from ..main import automated_sync
 from ..guards.roleguard import token_required
-from ..extensions import db
+from ..extensions import db, limiter
 from ..models import FirewallRule, User
 
 
@@ -22,6 +22,7 @@ genacc_bp = Blueprint('genacc', __name__)
 
 
 @genacc_bp.route('/api/v1/auth/signup', methods=['POST'])
+@limiter.limit("5 per minute")
 def signup():
     '''signing up logic with jwt jwt'''
     try:
@@ -86,6 +87,7 @@ def signup():
 
 
 @genacc_bp.route('/api/v1/auth/login', methods=['POST'])
+@limiter.limit("10 per minute")
 def login():
     '''logging in logic with RBAC with JWT'''
     try:
@@ -102,11 +104,17 @@ def login():
 
         user = User.query.filter_by(email=email).first()
 
+        # Use a uniform error message and always perform a hash comparison to
+        # avoid user enumeration via differing responses or timing.
         if not user:
-            return jsonify({'error': 'User with this credentials does not exist'}), 401
+            check_password_hash(
+                'pbkdf2:sha256:600000$dummysalt$0000000000000000000000000000000000000000000000000000000000000000',
+                password,
+            )
+            return jsonify({'error': 'Invalid email or password'}), 401
 
         if not check_password_hash(user.password, password):
-            return jsonify({'error': 'Passwords do not match'}), 401
+            return jsonify({'error': 'Invalid email or password'}), 401
 
         token = generate_token(
             user_id=user.id,
@@ -170,10 +178,11 @@ def force_sync(current_user):
 
 
 @genacc_bp.route('/api/auto-populate', methods=['POST'])
-def auto_populate_fields():
+@token_required()
+def auto_populate_fields(current_user):
     """Auto-population"""
     try:
-        data = request.json
+        data = request.get_json(silent=True) or {}
 
         system_type = data.get('system_type', '')
         category = data.get('category', '')

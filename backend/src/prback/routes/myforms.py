@@ -3,6 +3,7 @@ import logging
 from flask import jsonify, Blueprint
 from ..main import looks_like_ip, last_sync_time
 from ..models import FirewallRule
+from ..guards.roleguard import token_required
 from flask import current_app as app
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -11,7 +12,8 @@ myforms_bp = Blueprint('myforms', __name__)
 
 
 @myforms_bp.route('/form-options', methods=['GET'])
-def get_form_options():
+@token_required()
+def get_form_options(current_user):
     """Get all form options"""
 
     # Extract data from MySQL
@@ -71,7 +73,8 @@ def get_form_options():
 
 
 @myforms_bp.route('/api/mysql-options', methods=['GET'])
-def get_mysql_options():
+@token_required()
+def get_mysql_options(current_user):
     """Get options directly from MySQL database"""
     try:
         with app.app_context():

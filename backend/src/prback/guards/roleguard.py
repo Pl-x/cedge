@@ -30,11 +30,15 @@ def token_required(required_role=None):
 
             try:
                 data = jwt.decode(
-                    token, app.config['SECRET_KEY'], algorithms=['HS256'])
+                    token,
+                    app.config['SECRET_KEY'],
+                    algorithms=['HS256'],
+                    options={'require': ['exp', 'iat', 'user_id']},
+                )
                 current_user = User.query.get(data['user_id'])
 
                 if not current_user:
-                    return jsonify({'error': 'User not found'})
+                    return jsonify({'error': 'User not found'}), 401
                 if required_role is not None:
                     if current_user.role != required_role:
                         return jsonify({'error': 'Unauthorized: You lack the neccesary role to access this page'}), 403
@@ -42,7 +46,7 @@ def token_required(required_role=None):
                 return jsonify({'error': 'Token has expired please log in again'}), 401
             except jwt.InvalidTokenError:
                 return jsonify({'error': 'Invalid token. Please login again'}), 401
-            except Exception as e:
+            except Exception:
                 return jsonify({'error': 'Token validation error'}), 401
 
             return f(current_user, *args, **kwargs)
